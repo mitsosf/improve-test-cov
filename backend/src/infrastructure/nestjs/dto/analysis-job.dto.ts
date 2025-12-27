@@ -1,11 +1,9 @@
-import { AnalysisJobStatus } from '../../../domain/entities/AnalysisJob';
-
 export class AnalysisJobResponseDto {
   id!: string;
   repositoryId!: string;
   repositoryUrl!: string;
   branch!: string;
-  status!: AnalysisJobStatus;
+  status!: 'pending' | 'running' | 'completed' | 'failed';
   progress!: number;
   error!: string | null;
   filesFound!: number;

@@ -16,6 +16,7 @@ describe('SqliteGitHubRepoRepository', () => {
         url: 'https://github.com/user/repo',
         owner: 'user',
         name: 'repo',
+        branch: 'main',
         defaultBranch: 'main',
       });
 
@@ -33,6 +34,7 @@ describe('SqliteGitHubRepoRepository', () => {
         url: 'https://github.com/user/repo',
         owner: 'user',
         name: 'repo',
+        branch: 'main',
         defaultBranch: 'main',
       });
 
@@ -51,6 +53,7 @@ describe('SqliteGitHubRepoRepository', () => {
         url: 'https://github.com/user/repo',
         owner: 'user',
         name: 'repo',
+        branch: 'main',
         defaultBranch: 'main',
       });
 
@@ -73,12 +76,14 @@ describe('SqliteGitHubRepoRepository', () => {
         url: 'https://github.com/user/repo1',
         owner: 'user',
         name: 'repo1',
+        branch: 'main',
         defaultBranch: 'main',
       }));
       await repo.save(GitHubRepo.create({
         url: 'https://github.com/user/repo2',
         owner: 'user',
         name: 'repo2',
+        branch: 'main',
         defaultBranch: 'main',
       }));
 
@@ -93,6 +98,7 @@ describe('SqliteGitHubRepoRepository', () => {
         url: 'https://github.com/user/repo',
         owner: 'user',
         name: 'repo',
+        branch: 'main',
         defaultBranch: 'main',
       });
 

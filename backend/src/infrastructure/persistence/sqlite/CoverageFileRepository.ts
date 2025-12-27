@@ -1,6 +1,10 @@
 import Database from 'better-sqlite3';
 import { CoverageFile, CoverageFileStatus } from '../../../domain/entities/CoverageFile';
-import { ICoverageFileRepository } from '../../../domain/repositories/ICoverageFileRepository';
+import {
+  ICoverageFileRepository,
+  PaginationOptions,
+  PaginatedResult,
+} from '../../../domain/repositories/ICoverageFileRepository';
 import { CoveragePercentage } from '../../../domain/value-objects/CoveragePercentage';
 import { FilePath } from '../../../domain/value-objects/FilePath';
 import { getDatabase } from './database';
@@ -89,6 +93,37 @@ export class SqliteCoverageFileRepository implements ICoverageFileRepository {
     const stmt = this.db.prepare('SELECT * FROM coverage_files WHERE repository_id = ? ORDER BY path');
     const rows = stmt.all(repositoryId) as CoverageFileRow[];
     return rows.map((row) => this.mapToEntity(row));
+  }
+
+  async findByRepositoryIdPaginated(
+    repositoryId: string,
+    options: PaginationOptions,
+  ): Promise<PaginatedResult<CoverageFile>> {
+    const { page, limit } = options;
+    const offset = (page - 1) * limit;
+
+    // Get total count
+    const countStmt = this.db.prepare(
+      'SELECT COUNT(*) as count FROM coverage_files WHERE repository_id = ?',
+    );
+    const { count } = countStmt.get(repositoryId) as { count: number };
+
+    // Get paginated results
+    const stmt = this.db.prepare(`
+      SELECT * FROM coverage_files
+      WHERE repository_id = ?
+      ORDER BY path
+      LIMIT ? OFFSET ?
+    `);
+    const rows = stmt.all(repositoryId, limit, offset) as CoverageFileRow[];
+
+    return {
+      items: rows.map((row) => this.mapToEntity(row)),
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil(count / limit),
+    };
   }
 
   async findByPath(repositoryId: string, path: string): Promise<CoverageFile | null> {

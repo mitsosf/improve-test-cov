@@ -8,11 +8,13 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  BadRequestException,
   Inject,
   Query,
 } from '@nestjs/common';
-import { CreateJobDto, JobResponseDto, JobListResponseDto } from '../dto';
+import { CreateJobDto, CreateBulkJobDto, JobResponseDto, JobListResponseDto, BulkJobResponseDto } from '../dto';
 import {
+  Job,
   IJobRepository,
   JOB_REPOSITORY,
   IGitHubRepoRepository,
@@ -20,12 +22,12 @@ import {
   ICoverageFileRepository,
   COVERAGE_FILE_REPOSITORY,
 } from '../../../domain';
-import { StartImprovementJobCommand } from '../../../application/commands/StartImprovementJob';
-import { CancelJobCommand } from '../../../application/commands/CancelJob';
-import { GetJobStatusQuery } from '../../../application/queries/GetJobStatus';
+import { ImprovementService } from '../../../application';
 
 @Controller('jobs')
 export class JobsController {
+  private readonly improvementService: ImprovementService;
+
   constructor(
     @Inject(JOB_REPOSITORY)
     private readonly jobRepo: IJobRepository,
@@ -33,63 +35,130 @@ export class JobsController {
     private readonly repoRepository: IGitHubRepoRepository,
     @Inject(COVERAGE_FILE_REPOSITORY)
     private readonly coverageFileRepo: ICoverageFileRepository,
-  ) {}
+  ) {
+    this.improvementService = new ImprovementService(jobRepo, coverageFileRepo);
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateJobDto): Promise<JobResponseDto> {
-    const command = new StartImprovementJobCommand(this.jobRepo, this.coverageFileRepo);
+    try {
+      const result = await this.improvementService.startImprovement(
+        dto.repositoryId,
+        dto.fileId,
+        dto.aiProvider,
+      );
+      return this.toResponse(result.job);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('not found')) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+  }
 
-    const result = await command.execute({
-      repositoryId: dto.repositoryId,
-      fileId: dto.fileId,
-      aiProvider: dto.aiProvider,
-    });
+  @Post('bulk')
+  @HttpCode(HttpStatus.CREATED)
+  async createBulk(@Body() dto: CreateBulkJobDto): Promise<BulkJobResponseDto> {
+    const jobs: JobResponseDto[] = [];
+    let skipped = 0;
 
-    const query = new GetJobStatusQuery(this.jobRepo, this.repoRepository, this.coverageFileRepo);
-    return query.getById(result.job.id);
+    for (const fileId of dto.fileIds) {
+      try {
+        const result = await this.improvementService.startImprovement(
+          dto.repositoryId,
+          fileId,
+          dto.aiProvider || 'claude',
+        );
+
+        if (result.isExisting) {
+          skipped++;
+        }
+
+        jobs.push(await this.toResponse(result.job));
+      } catch (error) {
+        // Log error but continue with other files
+        console.error(`Failed to create job for file ${fileId}:`, error);
+      }
+    }
+
+    return {
+      jobs,
+      total: dto.fileIds.length,
+      created: jobs.length - skipped,
+      skipped,
+    };
   }
 
   @Get()
   async findAll(@Query('repositoryId') repositoryId?: string): Promise<JobListResponseDto> {
-    const query = new GetJobStatusQuery(this.jobRepo, this.repoRepository, this.coverageFileRepo);
+    // Only return improvement jobs (type='improvement')
+    const jobs = repositoryId
+      ? await this.jobRepo.findByRepositoryId(repositoryId, 'improvement')
+      : await this.jobRepo.findAll('improvement');
 
-    if (repositoryId) {
-      return query.listByRepository(repositoryId);
-    }
-
-    return query.listAll();
+    return {
+      jobs: await Promise.all(jobs.map(j => this.toResponse(j))),
+      total: jobs.length,
+    };
   }
 
   @Get('pending')
   async findPending(@Query('limit') limit?: string): Promise<JobListResponseDto> {
-    const query = new GetJobStatusQuery(this.jobRepo, this.repoRepository, this.coverageFileRepo);
-    return query.listPending(limit ? parseInt(limit, 10) : 10);
+    const jobs = await this.jobRepo.findPending(
+      limit ? parseInt(limit, 10) : 10,
+      'improvement'
+    );
+
+    return {
+      jobs: await Promise.all(jobs.map(j => this.toResponse(j))),
+      total: jobs.length,
+    };
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string): Promise<JobResponseDto> {
-    const query = new GetJobStatusQuery(this.jobRepo, this.repoRepository, this.coverageFileRepo);
-
-    try {
-      return await query.getById(id);
-    } catch (error) {
+    const job = await this.jobRepo.findById(id);
+    if (!job) {
       throw new NotFoundException(`Job not found: ${id}`);
     }
+    return this.toResponse(job);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async cancel(@Param('id') id: string): Promise<void> {
-    const command = new CancelJobCommand(this.jobRepo, this.coverageFileRepo);
-
     try {
-      await command.execute({ jobId: id });
+      await this.improvementService.cancel(id);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('not found')) {
-        throw new NotFoundException(`Job not found: ${id}`);
+      if (error instanceof Error) {
+        if (error.message.includes('not found')) {
+          throw new NotFoundException(error.message);
+        }
+        if (error.message.includes('Cannot cancel')) {
+          throw new BadRequestException(error.message);
+        }
       }
       throw error;
     }
+  }
+
+  private async toResponse(job: Job): Promise<JobResponseDto> {
+    const repo = await this.repoRepository.findById(job.repositoryId);
+
+    return {
+      id: job.id,
+      repositoryId: job.repositoryId,
+      repositoryName: repo?.fullName || 'Unknown',
+      fileId: job.fileId || '',
+      filePath: job.filePath || '',
+      status: job.status.value,
+      aiProvider: job.aiProvider || 'claude',
+      progress: job.progress,
+      prUrl: job.prUrl?.value || null,
+      error: job.error,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+    };
   }
 }

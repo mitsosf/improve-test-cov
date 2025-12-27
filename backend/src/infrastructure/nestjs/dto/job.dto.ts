@@ -1,5 +1,5 @@
-import { IsString, IsUUID, IsOptional, IsEnum } from 'class-validator';
-import { AiProvider } from '../../../domain/entities/ImprovementJob';
+import { IsString, IsUUID, IsOptional, IsEnum, IsArray } from 'class-validator';
+import { AiProvider } from '../../../domain/entities/Job';
 
 export class CreateJobDto {
   @IsUUID()
@@ -7,6 +7,19 @@ export class CreateJobDto {
 
   @IsUUID()
   fileId!: string;
+
+  @IsEnum(['claude', 'openai'])
+  @IsOptional()
+  aiProvider?: AiProvider;
+}
+
+export class CreateBulkJobDto {
+  @IsUUID()
+  repositoryId!: string;
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  fileIds!: string[];
 
   @IsEnum(['claude', 'openai'])
   @IsOptional()
@@ -31,4 +44,11 @@ export class JobResponseDto {
 export class JobListResponseDto {
   jobs!: JobResponseDto[];
   total!: number;
+}
+
+export class BulkJobResponseDto {
+  jobs!: JobResponseDto[];
+  total!: number;
+  created!: number;
+  skipped!: number;
 }

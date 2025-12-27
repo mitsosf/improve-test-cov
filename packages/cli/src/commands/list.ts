@@ -9,7 +9,15 @@ export const listCommand = new Command('list')
   .option('-r, --repos', 'List all registered repositories')
   .option('--repo-id <id>', 'List files for a specific repository')
   .option('-t, --threshold <percent>', 'Coverage threshold (default: 80)', '80')
-  .action(async (options: { repos?: boolean; repoId?: string; threshold: string }) => {
+  .option('--page <page>', 'Page number for files list', '1')
+  .option('--limit <limit>', 'Items per page', '20')
+  .action(async (options: {
+    repos?: boolean;
+    repoId?: string;
+    threshold: string;
+    page: string;
+    limit: string;
+  }) => {
     const parent = listCommand.parent;
     if (parent?.opts().apiUrl) {
       setApiUrl(parent.opts().apiUrl);
@@ -37,7 +45,7 @@ export const listCommand = new Command('list')
           table.push([
             repo.id,
             repo.name,
-            repo.defaultBranch,
+            repo.branch,
             repo.lastAnalyzedAt ? new Date(repo.lastAnalyzedAt).toLocaleString() : chalk.gray('Never'),
           ]);
         }
@@ -46,7 +54,9 @@ export const listCommand = new Command('list')
       } else if (options.repoId) {
         // List files for a specific repository
         const threshold = parseInt(options.threshold, 10);
-        const report = await getCoverage(options.repoId);
+        const page = parseInt(options.page, 10);
+        const limit = parseInt(options.limit, 10);
+        const report = await getCoverage(options.repoId, page, limit);
 
         const belowThreshold = report.files.filter(f => f.coveragePercentage < threshold);
         spinner.succeed(`Found ${belowThreshold.length} files below ${threshold}% coverage`);
@@ -77,8 +87,24 @@ export const listCommand = new Command('list')
         }
 
         console.log(table.toString());
+
+        // Show pagination info
+        if (report.pagination) {
+          console.log();
+          console.log(
+            chalk.gray(
+              `Page ${report.pagination.page} of ${report.pagination.totalPages} ` +
+                `(${report.pagination.total} total files)`,
+            ),
+          );
+          if (report.pagination.page < report.pagination.totalPages) {
+            console.log(chalk.gray(`Use --page ${report.pagination.page + 1} to see next page`));
+          }
+        }
+
         console.log();
         console.log(chalk.gray(`Use 'cov improve --file-id <id> --repo-id ${options.repoId}' to improve coverage`));
+        console.log(chalk.gray(`Or use 'cov improve --all-below ${threshold} --repo-id ${options.repoId}' to improve all`));
       } else {
         spinner.fail('Please specify --repos or --repo-id');
         console.log(chalk.yellow('Examples:'));

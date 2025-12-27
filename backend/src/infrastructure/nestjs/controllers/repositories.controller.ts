@@ -15,22 +15,16 @@ import {
 import { CreateRepositoryDto, AnalyzeRepositoryDto, RepositoryResponseDto, BranchResponseDto, AnalysisJobResponseDto } from '../dto';
 import { CoverageReportResponseDto } from '../dto';
 import {
+  Job,
   IGitHubRepoRepository,
   GITHUB_REPO_REPOSITORY,
   ICoverageFileRepository,
   COVERAGE_FILE_REPOSITORY,
-  IAnalysisJobRepository,
-  ANALYSIS_JOB_REPOSITORY,
-  IGitHubService,
-  GITHUB_SERVICE,
-  IGitHubApiClient,
-  GITHUB_API_CLIENT,
-  ICoverageParser,
-  COVERAGE_PARSER,
+  IJobRepository,
+  JOB_REPOSITORY,
   GitHubRepo,
-  AnalysisJob,
 } from '../../../domain';
-import { GetCoverageReportQuery } from '../../../application/queries/GetCoverageReport';
+import { IGitHubApiClient, GITHUB_API_CLIENT } from '../../github';
 
 @Controller('repositories')
 export class RepositoriesController {
@@ -39,21 +33,19 @@ export class RepositoriesController {
     private readonly repoRepository: IGitHubRepoRepository,
     @Inject(COVERAGE_FILE_REPOSITORY)
     private readonly coverageFileRepo: ICoverageFileRepository,
-    @Inject(ANALYSIS_JOB_REPOSITORY)
-    private readonly analysisJobRepo: IAnalysisJobRepository,
-    @Inject(GITHUB_SERVICE)
-    private readonly githubService: IGitHubService,
+    @Inject(JOB_REPOSITORY)
+    private readonly jobRepo: IJobRepository,
     @Inject(GITHUB_API_CLIENT)
     private readonly githubApiClient: IGitHubApiClient,
-    @Inject(COVERAGE_PARSER)
-    private readonly coverageParser: ICoverageParser,
   ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateRepositoryDto): Promise<RepositoryResponseDto> {
-    // Check if repository already exists
-    let repository = await this.repoRepository.findByUrl(dto.url);
+    const branch = dto.branch || 'main';
+
+    // Check if this repo+branch combination already exists
+    let repository = await this.repoRepository.findByUrlAndBranch(dto.url, branch);
 
     if (!repository) {
       const { owner, name } = GitHubRepo.fromGitHubUrl(dto.url);
@@ -61,7 +53,8 @@ export class RepositoriesController {
         url: dto.url,
         owner,
         name,
-        defaultBranch: dto.branch || 'main',
+        branch,
+        defaultBranch: branch,
       });
       await this.repoRepository.save(repository);
     }
@@ -83,20 +76,29 @@ export class RepositoriesController {
 
     try {
       const { owner, name } = GitHubRepo.fromGitHubUrl(url);
-      const branches = await this.githubApiClient.listBranches(owner, name);
+      const allBranches = await this.githubApiClient.listBranches(owner, name);
+
+      // Get already tracked branches for this URL
+      const trackedBranches = await this.repoRepository.findBranchesByUrl(url);
+
+      // Filter out tracked branches
+      const availableBranches = allBranches.filter(
+        (b) => !trackedBranches.includes(b.name),
+      );
 
       // Sort branches: default first, then alphabetically
-      branches.sort((a, b) => {
+      availableBranches.sort((a, b) => {
         if (a.isDefault) return -1;
         if (b.isDefault) return 1;
         return a.name.localeCompare(b.name);
       });
 
-      const defaultBranch = branches.find(b => b.isDefault)?.name || 'main';
+      const defaultBranch = allBranches.find((b) => b.isDefault)?.name || 'main';
 
       return {
-        branches: branches.map(b => b.name),
+        branches: availableBranches.map((b) => b.name),
         defaultBranch,
+        allTracked: availableBranches.length === 0,
       };
     } catch (error) {
       if (error instanceof Error && error.message.includes('Invalid GitHub URL')) {
@@ -141,20 +143,20 @@ export class RepositoriesController {
     }
 
     // Check if there's already a pending or running analysis for this repo
-    const existingJobs = await this.analysisJobRepo.findByRepositoryId(id);
-    const activeJob = existingJobs.find(j => j.status === 'pending' || j.status === 'running');
+    const existingJobs = await this.jobRepo.findByRepositoryId(id, 'analysis');
+    const activeJob = existingJobs.find(j => j.status.value === 'pending' || j.status.value === 'running');
     if (activeJob) {
       return this.toAnalysisJobResponse(activeJob);
     }
 
     // Create a new analysis job
-    const job = AnalysisJob.create({
+    const job = Job.createAnalysis({
       repositoryId: repository.id,
       repositoryUrl: repository.url,
       branch: dto.branch || repository.defaultBranch,
     });
 
-    await this.analysisJobRepo.save(job);
+    await this.jobRepo.save(job);
 
     return this.toAnalysisJobResponse(job);
   }
@@ -164,8 +166,8 @@ export class RepositoriesController {
     @Param('id') repoId: string,
     @Param('jobId') jobId: string,
   ): Promise<AnalysisJobResponseDto> {
-    const job = await this.analysisJobRepo.findById(jobId);
-    if (!job || job.repositoryId !== repoId) {
+    const job = await this.jobRepo.findById(jobId);
+    if (!job || job.repositoryId !== repoId || job.type !== 'analysis') {
       throw new NotFoundException(`Analysis job not found: ${jobId}`);
     }
     return this.toAnalysisJobResponse(job);
@@ -175,7 +177,7 @@ export class RepositoriesController {
   async getLatestAnalysisJob(
     @Param('id') repoId: string,
   ): Promise<AnalysisJobResponseDto | null> {
-    const job = await this.analysisJobRepo.findLatestByRepositoryId(repoId);
+    const job = await this.jobRepo.findLatestByRepositoryId(repoId, 'analysis');
     if (!job) {
       return null;
     }
@@ -183,14 +185,69 @@ export class RepositoriesController {
   }
 
   @Get(':id/coverage')
-  async getCoverage(@Param('id') id: string): Promise<CoverageReportResponseDto> {
+  async getCoverage(
+    @Param('id') id: string,
+    @Query('page') pageParam?: string,
+    @Query('limit') limitParam?: string,
+  ): Promise<CoverageReportResponseDto> {
     const repository = await this.repoRepository.findById(id);
     if (!repository) {
       throw new NotFoundException(`Repository not found: ${id}`);
     }
 
-    const query = new GetCoverageReportQuery(this.repoRepository, this.coverageFileRepo);
-    return query.execute(id);
+    const threshold = parseInt(process.env.COVERAGE_THRESHOLD || '80', 10);
+    const page = pageParam ? parseInt(pageParam, 10) : undefined;
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+
+    // Get all files for summary calculation
+    const allFiles = await this.coverageFileRepo.findByRepositoryId(id);
+    const totalCoverage =
+      allFiles.length > 0
+        ? allFiles.reduce((sum, f) => sum + f.coveragePercentage.value, 0) / allFiles.length
+        : 0;
+
+    // Get files for response (paginated or all)
+    let files = allFiles;
+    let pagination: { page: number; limit: number; total: number; totalPages: number } | undefined;
+
+    if (page && limit) {
+      const result = await this.coverageFileRepo.findByRepositoryIdPaginated(id, { page, limit });
+      files = result.items;
+      pagination = {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      };
+    }
+
+    return {
+      repository: {
+        id: repository.id,
+        name: repository.fullName,
+        url: repository.url,
+        branch: repository.branch,
+        defaultBranch: repository.defaultBranch,
+        lastAnalyzedAt: repository.lastAnalyzedAt,
+      },
+      summary: {
+        totalFiles: allFiles.length,
+        averageCoverage: Math.round(totalCoverage * 100) / 100,
+        filesBelowThreshold: allFiles.filter((f) => f.coveragePercentage.value < threshold).length,
+        filesImproving: allFiles.filter((f) => f.status === 'improving').length,
+        filesImproved: allFiles.filter((f) => f.status === 'improved').length,
+      },
+      files: files.map((f) => ({
+        id: f.id,
+        path: f.path.value,
+        coveragePercentage: f.coveragePercentage.value,
+        uncoveredLines: f.uncoveredLines,
+        status: f.status,
+        projectDir: f.projectDir,
+        needsImprovement: f.coveragePercentage.value < threshold && f.status === 'pending',
+      })),
+      pagination,
+    };
   }
 
   private toResponse(repository: GitHubRepo): RepositoryResponseDto {
@@ -198,19 +255,20 @@ export class RepositoriesController {
       id: repository.id,
       url: repository.url,
       name: repository.fullName,
+      branch: repository.branch,
       defaultBranch: repository.defaultBranch,
       lastAnalyzedAt: repository.lastAnalyzedAt,
       createdAt: repository.createdAt,
     };
   }
 
-  private toAnalysisJobResponse(job: AnalysisJob): AnalysisJobResponseDto {
+  private toAnalysisJobResponse(job: Job): AnalysisJobResponseDto {
     return {
       id: job.id,
       repositoryId: job.repositoryId,
-      repositoryUrl: job.repositoryUrl,
-      branch: job.branch,
-      status: job.status,
+      repositoryUrl: job.repositoryUrl || '',
+      branch: job.branch || '',
+      status: job.status.value as 'pending' | 'running' | 'completed' | 'failed',
       progress: job.progress,
       error: job.error,
       filesFound: job.filesFound,

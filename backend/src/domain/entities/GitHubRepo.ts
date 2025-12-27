@@ -5,7 +5,8 @@ export interface GitHubRepoProps {
   url: string;
   owner: string;
   name: string;
-  defaultBranch: string;
+  branch: string;           // The tracked branch
+  defaultBranch: string;    // The repo's default branch (for reference)
   lastAnalyzedAt?: Date | null;
   createdAt?: Date;
 }
@@ -18,6 +19,7 @@ export class GitHubRepo {
   private readonly _url: string;
   private readonly _owner: string;
   private readonly _name: string;
+  private readonly _branch: string;
   private readonly _defaultBranch: string;
   private _lastAnalyzedAt: Date | null;
   private readonly _createdAt: Date;
@@ -27,6 +29,7 @@ export class GitHubRepo {
     this._url = props.url;
     this._owner = props.owner;
     this._name = props.name;
+    this._branch = props.branch;
     this._defaultBranch = props.defaultBranch;
     this._lastAnalyzedAt = props.lastAnalyzedAt || null;
     this._createdAt = props.createdAt || new Date();
@@ -72,6 +75,10 @@ export class GitHubRepo {
 
   get name(): string {
     return this._name;
+  }
+
+  get branch(): string {
+    return this._branch;
   }
 
   get fullName(): string {

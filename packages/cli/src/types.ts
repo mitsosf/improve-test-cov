@@ -14,16 +14,6 @@ export interface CreateRepositoryRequest {
   branch?: string;
 }
 
-export interface AnalyzeRepositoryRequest {
-  branch?: string;
-}
-
-export interface BranchesDto {
-  branches: string[];
-  defaultBranch: string;
-  allTracked: boolean;
-}
-
 // Coverage DTOs
 export interface CoverageFileDto {
   id: string;
@@ -31,7 +21,7 @@ export interface CoverageFileDto {
   coveragePercentage: number;
   uncoveredLines: number[];
   status: 'pending' | 'improving' | 'improved';
-  projectDir: string | null; // Relative path to project directory for monorepos (e.g., 'ui/')
+  projectDir: string | null;
 }
 
 export interface PaginationDto {
@@ -93,45 +83,4 @@ export interface BulkJobDto {
   total: number;
   created: number;
   skipped: number;
-}
-
-// Analysis Job DTOs
-export type AnalysisJobStatus = 'pending' | 'running' | 'completed' | 'failed';
-
-export interface AnalysisJobDto {
-  id: string;
-  repositoryId: string;
-  repositoryUrl: string;
-  branch: string;
-  status: AnalysisJobStatus;
-  progress: number;
-  error: string | null;
-  filesFound: number;
-  filesBelowThreshold: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// API Response wrapper
-export interface ApiResponse<T> {
-  data: T;
-  success: boolean;
-  error?: string;
-}
-
-// WebSocket events
-export interface JobProgressEvent {
-  jobId: string;
-  progress: number;
-  message: string;
-}
-
-export interface JobCompletedEvent {
-  jobId: string;
-  prUrl: string;
-}
-
-export interface JobFailedEvent {
-  jobId: string;
-  error: string;
 }

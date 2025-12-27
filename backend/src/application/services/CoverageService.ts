@@ -5,19 +5,13 @@ import {
   GitHubRepo,
   ICoverageFileRepository,
   IGitHubRepoRepository,
-  IGitHubService,
-  ICoverageParser,
-  ICommandRunner,
-  CoverageReport,
 } from '../../domain';
+import { IGitHubService } from '../../infrastructure/github';
+import { ICoverageParser, CoverageReport } from '../../infrastructure/coverage';
+import { ICommandRunner } from '../../infrastructure/runner';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { readdirSync, statSync } from 'fs';
-
-export interface AnalyzeCoverageInput {
-  repositoryUrl: string;
-  branch?: string;
-}
 
 export interface AnalyzeCoverageResult {
   repository: GitHubRepo;
@@ -27,10 +21,10 @@ export interface AnalyzeCoverageResult {
 }
 
 /**
- * Command to analyze test coverage for a repository.
- * Clones the repo, runs tests with coverage, and stores results.
+ * Application service for coverage-related use cases.
+ * Orchestrates domain objects for coverage analysis.
  */
-export class AnalyzeCoverageCommand {
+export class CoverageService {
   constructor(
     private readonly repoRepository: IGitHubRepoRepository,
     private readonly coverageFileRepo: ICoverageFileRepository,
@@ -39,17 +33,22 @@ export class AnalyzeCoverageCommand {
     private readonly commandRunner: ICommandRunner,
   ) {}
 
-  async execute(input: AnalyzeCoverageInput): Promise<AnalyzeCoverageResult> {
+  /**
+   * Analyze test coverage for a repository.
+   * Clones the repo, runs tests with coverage, and stores results.
+   */
+  async analyze(repositoryUrl: string, branch?: string): Promise<AnalyzeCoverageResult> {
     // 1. Find or create repository
-    let repository = await this.repoRepository.findByUrl(input.repositoryUrl);
+    let repository = await this.repoRepository.findByUrl(repositoryUrl);
 
     if (!repository) {
-      const { owner, name } = GitHubRepo.fromGitHubUrl(input.repositoryUrl);
+      const { owner, name } = GitHubRepo.fromGitHubUrl(repositoryUrl);
       repository = GitHubRepo.create({
-        url: input.repositoryUrl,
+        url: repositoryUrl,
         owner,
         name,
-        defaultBranch: input.branch || 'main',
+        branch: branch || 'main',
+        defaultBranch: branch || 'main',
       });
       await this.repoRepository.save(repository);
     }
@@ -59,7 +58,7 @@ export class AnalyzeCoverageCommand {
     await this.githubService.clone({
       repoUrl: repository.url,
       targetDir: tempDir,
-      branch: input.branch || repository.defaultBranch,
+      branch: branch || repository.defaultBranch,
     });
 
     try {

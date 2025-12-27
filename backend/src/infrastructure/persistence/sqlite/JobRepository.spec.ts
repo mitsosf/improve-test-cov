@@ -1,4 +1,4 @@
-import { ImprovementJob } from '../../../domain/entities/ImprovementJob';
+import { Job } from '../../../domain/entities/Job';
 import { GitHubRepo } from '../../../domain/entities/GitHubRepo';
 import { CoverageFile } from '../../../domain/entities/CoverageFile';
 import { CoveragePercentage } from '../../../domain/value-objects/CoveragePercentage';
@@ -27,6 +27,7 @@ describe('SqliteJobRepository', () => {
       url: 'https://github.com/user/repo',
       owner: 'user',
       name: 'repo',
+      branch: 'main',
       defaultBranch: 'main',
     });
     await repoRepo.save(testRepo);
@@ -41,8 +42,8 @@ describe('SqliteJobRepository', () => {
   });
 
   describe('save and findById', () => {
-    it('should save and retrieve a job', async () => {
-      const job = ImprovementJob.create({
+    it('should save and retrieve an improvement job', async () => {
+      const job = Job.createImprovement({
         repositoryId: testRepo.id,
         fileId: testFile.id,
         filePath: 'src/utils.ts',
@@ -56,10 +57,29 @@ describe('SqliteJobRepository', () => {
       expect(found!.repositoryId).toBe(testRepo.id);
       expect(found!.aiProvider).toBe('claude');
       expect(found!.status.isPending).toBe(true);
+      expect(found!.type).toBe('improvement');
+    });
+
+    it('should save and retrieve an analysis job', async () => {
+      const job = Job.createAnalysis({
+        repositoryId: testRepo.id,
+        repositoryUrl: 'https://github.com/user/repo',
+        branch: 'main',
+      });
+
+      await jobRepo.save(job);
+      const found = await jobRepo.findById(job.id);
+
+      expect(found).not.toBeNull();
+      expect(found!.repositoryId).toBe(testRepo.id);
+      expect(found!.repositoryUrl).toBe('https://github.com/user/repo');
+      expect(found!.branch).toBe('main');
+      expect(found!.status.isPending).toBe(true);
+      expect(found!.type).toBe('analysis');
     });
 
     it('should update job status', async () => {
-      const job = ImprovementJob.create({
+      const job = Job.createImprovement({
         repositoryId: testRepo.id,
         fileId: testFile.id,
         filePath: 'src/utils.ts',
@@ -76,8 +96,8 @@ describe('SqliteJobRepository', () => {
       expect(found!.progress).toBe(50);
     });
 
-    it('should save completed job with PR URL', async () => {
-      const job = ImprovementJob.create({
+    it('should save completed improvement job with PR URL', async () => {
+      const job = Job.createImprovement({
         repositoryId: testRepo.id,
         fileId: testFile.id,
         filePath: 'src/utils.ts',
@@ -86,24 +106,42 @@ describe('SqliteJobRepository', () => {
 
       await jobRepo.save(job);
       job.start();
-      job.complete(GitHubPrUrl.create('https://github.com/user/repo/pull/123'));
+      job.completeImprovement(GitHubPrUrl.create('https://github.com/user/repo/pull/123'));
       await jobRepo.save(job);
 
       const found = await jobRepo.findById(job.id);
       expect(found!.status.isCompleted).toBe(true);
       expect(found!.prUrl?.value).toBe('https://github.com/user/repo/pull/123');
     });
+
+    it('should save completed analysis job with file counts', async () => {
+      const job = Job.createAnalysis({
+        repositoryId: testRepo.id,
+        repositoryUrl: 'https://github.com/user/repo',
+        branch: 'main',
+      });
+
+      await jobRepo.save(job);
+      job.start();
+      job.completeAnalysis(10, 3);
+      await jobRepo.save(job);
+
+      const found = await jobRepo.findById(job.id);
+      expect(found!.status.isCompleted).toBe(true);
+      expect(found!.filesFound).toBe(10);
+      expect(found!.filesBelowThreshold).toBe(3);
+    });
   });
 
   describe('findPending', () => {
     it('should return pending jobs', async () => {
-      const job1 = ImprovementJob.create({
+      const job1 = Job.createImprovement({
         repositoryId: testRepo.id,
         fileId: testFile.id,
         filePath: 'src/utils.ts',
         aiProvider: 'claude',
       });
-      const job2 = ImprovementJob.create({
+      const job2 = Job.createImprovement({
         repositoryId: testRepo.id,
         fileId: testFile.id,
         filePath: 'src/other.ts',
@@ -119,11 +157,36 @@ describe('SqliteJobRepository', () => {
       expect(pending).toHaveLength(1);
       expect(pending[0].id).toBe(job1.id);
     });
+
+    it('should filter pending jobs by type', async () => {
+      const analysisJob = Job.createAnalysis({
+        repositoryId: testRepo.id,
+        repositoryUrl: 'https://github.com/user/repo',
+        branch: 'main',
+      });
+      const improvementJob = Job.createImprovement({
+        repositoryId: testRepo.id,
+        fileId: testFile.id,
+        filePath: 'src/utils.ts',
+        aiProvider: 'claude',
+      });
+
+      await jobRepo.save(analysisJob);
+      await jobRepo.save(improvementJob);
+
+      const pendingAnalysis = await jobRepo.findPending(10, 'analysis');
+      expect(pendingAnalysis).toHaveLength(1);
+      expect(pendingAnalysis[0].type).toBe('analysis');
+
+      const pendingImprovement = await jobRepo.findPending(10, 'improvement');
+      expect(pendingImprovement).toHaveLength(1);
+      expect(pendingImprovement[0].type).toBe('improvement');
+    });
   });
 
   describe('findPendingByRepositoryId', () => {
     it('should return active job for repository', async () => {
-      const job = ImprovementJob.create({
+      const job = Job.createImprovement({
         repositoryId: testRepo.id,
         fileId: testFile.id,
         filePath: 'src/utils.ts',
@@ -140,6 +203,36 @@ describe('SqliteJobRepository', () => {
     it('should return null when no active job', async () => {
       const found = await jobRepo.findPendingByRepositoryId(testRepo.id);
       expect(found).toBeNull();
+    });
+  });
+
+  describe('findByRepositoryId with type filter', () => {
+    it('should filter jobs by type', async () => {
+      const analysisJob = Job.createAnalysis({
+        repositoryId: testRepo.id,
+        repositoryUrl: 'https://github.com/user/repo',
+        branch: 'main',
+      });
+      const improvementJob = Job.createImprovement({
+        repositoryId: testRepo.id,
+        fileId: testFile.id,
+        filePath: 'src/utils.ts',
+        aiProvider: 'claude',
+      });
+
+      await jobRepo.save(analysisJob);
+      await jobRepo.save(improvementJob);
+
+      const analysisJobs = await jobRepo.findByRepositoryId(testRepo.id, 'analysis');
+      expect(analysisJobs).toHaveLength(1);
+      expect(analysisJobs[0].type).toBe('analysis');
+
+      const improvementJobs = await jobRepo.findByRepositoryId(testRepo.id, 'improvement');
+      expect(improvementJobs).toHaveLength(1);
+      expect(improvementJobs[0].type).toBe('improvement');
+
+      const allJobs = await jobRepo.findByRepositoryId(testRepo.id);
+      expect(allJobs).toHaveLength(2);
     });
   });
 });

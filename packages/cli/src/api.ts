@@ -3,10 +3,12 @@ import type {
   CoverageReportDto,
   JobDto,
   JobListDto,
+  BulkJobDto,
   CreateRepositoryRequest,
   CreateJobRequest,
+  CreateBulkJobRequest,
   AiProvider,
-} from '@coverage-improver/shared';
+} from './types.js';
 
 let apiUrl = 'http://localhost:3000/api';
 
@@ -58,8 +60,16 @@ export async function analyzeRepository(id: string, branch?: string): Promise<Co
   });
 }
 
-export async function getCoverage(repoId: string): Promise<CoverageReportDto> {
-  return request<CoverageReportDto>(`/repositories/${repoId}/coverage`);
+export async function getCoverage(
+  repoId: string,
+  page?: number,
+  limit?: number,
+): Promise<CoverageReportDto> {
+  const params = new URLSearchParams();
+  if (page) params.set('page', page.toString());
+  if (limit) params.set('limit', limit.toString());
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return request<CoverageReportDto>(`/repositories/${repoId}/coverage${query}`);
 }
 
 // Jobs API
@@ -85,4 +95,15 @@ export async function getJob(id: string): Promise<JobDto> {
 
 export async function cancelJob(id: string): Promise<void> {
   await request<void>(`/jobs/${id}`, { method: 'DELETE' });
+}
+
+export async function createBulkJobs(
+  repositoryId: string,
+  fileIds: string[],
+  aiProvider: AiProvider = 'claude',
+): Promise<BulkJobDto> {
+  return request<BulkJobDto>('/jobs/bulk', {
+    method: 'POST',
+    body: JSON.stringify({ repositoryId, fileIds, aiProvider } as CreateBulkJobRequest),
+  });
 }

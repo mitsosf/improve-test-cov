@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
-import { IAiProvider, TestGenerationContext, GeneratedTest } from '../../domain/ports/IAiProvider';
-import { AiProvider } from '../../domain/entities/ImprovementJob';
+import { IAiProvider, TestGenerationContext, GeneratedTest } from './IAiProvider';
+import { AiProvider } from '../../domain';
 
 /**
  * Claude provider for test generation
@@ -147,11 +147,7 @@ No test file exists yet.
       }, timeoutMs);
 
       proc.stdout.on('data', (data) => {
-        const chunk = data.toString();
-        stdout += chunk;
-        if (chunk.trim().length > 0) {
-          console.log('[ClaudeProvider] Received output...');
-        }
+        stdout += data.toString();
       });
 
       proc.stderr.on('data', (data) => {

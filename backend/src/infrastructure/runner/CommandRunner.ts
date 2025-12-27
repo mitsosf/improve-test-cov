@@ -5,7 +5,7 @@ import {
   ICommandRunner,
   PackageManager,
   CommandResult,
-} from '../../domain/ports/ICommandRunner';
+} from './ICommandRunner';
 
 // Re-export types for backward compatibility
 export { PackageManager, CommandResult };

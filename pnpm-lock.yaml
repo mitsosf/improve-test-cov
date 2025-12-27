@@ -142,9 +142,6 @@ importers:
 
   packages/cli:
     dependencies:
-      '@coverage-improver/shared':
-        specifier: workspace:*
-        version: link:../shared
       chalk:
         specifier: ^5.4.0
         version: 5.6.2

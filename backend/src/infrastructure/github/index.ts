@@ -1,2 +1,4 @@
-export { GitHubApiClient, RepoInfo, CreatePrParams, PrInfo } from './GitHubApiClient';
-export { GitHubService, CloneOptions, CommitAndPushOptions, CreatePrOptions } from './GitHubService';
+export { IGitHubService, GITHUB_SERVICE, CloneOptions, CommitAndPushOptions } from './IGitHubService';
+export { IGitHubApiClient, GITHUB_API_CLIENT, RepoInfo, BranchInfo, CreatePrParams, PrInfo } from './IGitHubApiClient';
+export { GitHubApiClient } from './GitHubApiClient';
+export { GitHubService, CreatePrOptions } from './GitHubService';

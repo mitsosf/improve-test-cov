@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { ImprovementJob, AiProvider } from '../../../domain/entities/ImprovementJob';
+import { Job, JobType, AiProvider } from '../../../domain/entities/Job';
 import { IJobRepository } from '../../../domain/repositories/IJobRepository';
 import { JobStatus } from '../../../domain/value-objects/JobStatus';
 import { GitHubPrUrl } from '../../../domain/value-objects/GitHubPrUrl';
@@ -7,16 +7,23 @@ import { getDatabase } from './database';
 
 interface JobRow {
   id: string;
+  type: string;
   repository_id: string;
-  file_id: string;
-  file_path: string;
   status: string;
-  ai_provider: string;
   progress: number;
-  pr_url: string | null;
   error: string | null;
   created_at: string;
   updated_at: string;
+  // Analysis-specific
+  repository_url: string | null;
+  branch: string | null;
+  files_found: number;
+  files_below_threshold: number;
+  // Improvement-specific
+  file_id: string | null;
+  file_path: string | null;
+  ai_provider: string | null;
+  pr_url: string | null;
 }
 
 export class SqliteJobRepository implements IJobRepository {
@@ -26,101 +33,144 @@ export class SqliteJobRepository implements IJobRepository {
     this.db = db || getDatabase();
   }
 
-  async save(job: ImprovementJob): Promise<void> {
+  async save(job: Job): Promise<void> {
     const stmt = this.db.prepare(`
-      INSERT INTO improvement_jobs (id, repository_id, file_id, file_path, status, ai_provider, progress, pr_url, error, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO jobs (
+        id, type, repository_id, status, progress, error, created_at, updated_at,
+        repository_url, branch, files_found, files_below_threshold,
+        file_id, file_path, ai_provider, pr_url
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         status = excluded.status,
         progress = excluded.progress,
-        pr_url = excluded.pr_url,
         error = excluded.error,
-        updated_at = excluded.updated_at
+        updated_at = excluded.updated_at,
+        files_found = excluded.files_found,
+        files_below_threshold = excluded.files_below_threshold,
+        pr_url = excluded.pr_url
     `);
 
     stmt.run(
       job.id,
+      job.type,
       job.repositoryId,
-      job.fileId,
-      job.filePath,
       job.status.value,
-      job.aiProvider,
       job.progress,
-      job.prUrl?.value || null,
       job.error,
       job.createdAt.toISOString(),
       job.updatedAt.toISOString(),
+      job.repositoryUrl,
+      job.branch,
+      job.filesFound,
+      job.filesBelowThreshold,
+      job.fileId,
+      job.filePath,
+      job.aiProvider,
+      job.prUrl?.value || null,
     );
   }
 
-  async findById(id: string): Promise<ImprovementJob | null> {
-    const stmt = this.db.prepare('SELECT * FROM improvement_jobs WHERE id = ?');
+  async findById(id: string): Promise<Job | null> {
+    const stmt = this.db.prepare('SELECT * FROM jobs WHERE id = ?');
     const row = stmt.get(id) as JobRow | undefined;
     return row ? this.mapToEntity(row) : null;
   }
 
-  async findByRepositoryId(repositoryId: string): Promise<ImprovementJob[]> {
-    const stmt = this.db.prepare('SELECT * FROM improvement_jobs WHERE repository_id = ? ORDER BY created_at DESC');
-    const rows = stmt.all(repositoryId) as JobRow[];
+  async findByRepositoryId(repositoryId: string, type?: JobType): Promise<Job[]> {
+    const sql = type
+      ? 'SELECT * FROM jobs WHERE repository_id = ? AND type = ? ORDER BY created_at DESC'
+      : 'SELECT * FROM jobs WHERE repository_id = ? ORDER BY created_at DESC';
+    const stmt = this.db.prepare(sql);
+    const rows = (type ? stmt.all(repositoryId, type) : stmt.all(repositoryId)) as JobRow[];
     return rows.map((row) => this.mapToEntity(row));
   }
 
-  async findByFileId(fileId: string): Promise<ImprovementJob[]> {
-    const stmt = this.db.prepare('SELECT * FROM improvement_jobs WHERE file_id = ? ORDER BY created_at DESC');
+  async findByFileId(fileId: string): Promise<Job[]> {
+    const stmt = this.db.prepare('SELECT * FROM jobs WHERE file_id = ? ORDER BY created_at DESC');
     const rows = stmt.all(fileId) as JobRow[];
     return rows.map((row) => this.mapToEntity(row));
   }
 
-  async findPending(limit?: number): Promise<ImprovementJob[]> {
-    const sql = limit
-      ? `SELECT * FROM improvement_jobs WHERE status = 'pending' ORDER BY created_at ASC LIMIT ${limit}`
-      : "SELECT * FROM improvement_jobs WHERE status = 'pending' ORDER BY created_at ASC";
+  async findPending(limit?: number, type?: JobType): Promise<Job[]> {
+    let sql = "SELECT * FROM jobs WHERE status = 'pending'";
+    if (type) sql += ' AND type = ?';
+    sql += ' ORDER BY created_at ASC';
+    if (limit) sql += ` LIMIT ${limit}`;
+
     const stmt = this.db.prepare(sql);
-    const rows = stmt.all() as JobRow[];
+    const rows = (type ? stmt.all(type) : stmt.all()) as JobRow[];
     return rows.map((row) => this.mapToEntity(row));
   }
 
-  async findPendingByRepositoryId(repositoryId: string): Promise<ImprovementJob | null> {
-    const stmt = this.db.prepare(`
-      SELECT * FROM improvement_jobs
+  async findPendingByRepositoryId(repositoryId: string, type?: JobType): Promise<Job | null> {
+    let sql = `
+      SELECT * FROM jobs
       WHERE repository_id = ? AND status IN ('pending', 'running')
-      ORDER BY created_at ASC
-      LIMIT 1
-    `);
-    const row = stmt.get(repositoryId) as JobRow | undefined;
+    `;
+    if (type) sql += ' AND type = ?';
+    sql += ' ORDER BY created_at ASC LIMIT 1';
+
+    const stmt = this.db.prepare(sql);
+    const row = (type ? stmt.get(repositoryId, type) : stmt.get(repositoryId)) as JobRow | undefined;
     return row ? this.mapToEntity(row) : null;
   }
 
-  async findRunning(): Promise<ImprovementJob[]> {
-    const stmt = this.db.prepare("SELECT * FROM improvement_jobs WHERE status = 'running' ORDER BY created_at ASC");
-    const rows = stmt.all() as JobRow[];
+  async findLatestByRepositoryId(repositoryId: string, type?: JobType): Promise<Job | null> {
+    let sql = 'SELECT * FROM jobs WHERE repository_id = ?';
+    if (type) sql += ' AND type = ?';
+    sql += ' ORDER BY created_at DESC LIMIT 1';
+
+    const stmt = this.db.prepare(sql);
+    const row = (type ? stmt.get(repositoryId, type) : stmt.get(repositoryId)) as JobRow | undefined;
+    return row ? this.mapToEntity(row) : null;
+  }
+
+  async findRunning(type?: JobType): Promise<Job[]> {
+    let sql = "SELECT * FROM jobs WHERE status = 'running'";
+    if (type) sql += ' AND type = ?';
+    sql += ' ORDER BY created_at ASC';
+
+    const stmt = this.db.prepare(sql);
+    const rows = (type ? stmt.all(type) : stmt.all()) as JobRow[];
     return rows.map((row) => this.mapToEntity(row));
   }
 
-  async findAll(): Promise<ImprovementJob[]> {
-    const stmt = this.db.prepare('SELECT * FROM improvement_jobs ORDER BY created_at DESC');
-    const rows = stmt.all() as JobRow[];
+  async findAll(type?: JobType): Promise<Job[]> {
+    let sql = 'SELECT * FROM jobs';
+    if (type) sql += ' WHERE type = ?';
+    sql += ' ORDER BY created_at DESC';
+
+    const stmt = this.db.prepare(sql);
+    const rows = (type ? stmt.all(type) : stmt.all()) as JobRow[];
     return rows.map((row) => this.mapToEntity(row));
   }
 
   async delete(id: string): Promise<void> {
-    const stmt = this.db.prepare('DELETE FROM improvement_jobs WHERE id = ?');
+    const stmt = this.db.prepare('DELETE FROM jobs WHERE id = ?');
     stmt.run(id);
   }
 
-  private mapToEntity(row: JobRow): ImprovementJob {
-    return ImprovementJob.reconstitute({
+  private mapToEntity(row: JobRow): Job {
+    return Job.reconstitute({
       id: row.id,
+      type: row.type as JobType,
       repositoryId: row.repository_id,
-      fileId: row.file_id,
-      filePath: row.file_path,
       status: JobStatus.fromString(row.status),
-      aiProvider: row.ai_provider as AiProvider,
       progress: row.progress,
-      prUrl: row.pr_url ? GitHubPrUrl.create(row.pr_url) : null,
       error: row.error,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
+      // Analysis-specific
+      repositoryUrl: row.repository_url || undefined,
+      branch: row.branch || undefined,
+      filesFound: row.files_found,
+      filesBelowThreshold: row.files_below_threshold,
+      // Improvement-specific
+      fileId: row.file_id || undefined,
+      filePath: row.file_path || undefined,
+      aiProvider: row.ai_provider as AiProvider | undefined,
+      prUrl: row.pr_url ? GitHubPrUrl.create(row.pr_url) : null,
     });
   }
 }

@@ -7,6 +7,7 @@ describe('GitHubRepo', () => {
         url: 'https://github.com/user/repo',
         owner: 'user',
         name: 'repo',
+        branch: 'main',
         defaultBranch: 'main',
       });
 
@@ -24,6 +25,7 @@ describe('GitHubRepo', () => {
           url: '',
           owner: 'user',
           name: 'repo',
+          branch: 'main',
           defaultBranch: 'main',
         }),
       ).toThrow('Repository URL cannot be empty');
@@ -35,6 +37,7 @@ describe('GitHubRepo', () => {
           url: 'https://gitlab.com/user/repo',
           owner: 'user',
           name: 'repo',
+          branch: 'main',
           defaultBranch: 'main',
         }),
       ).toThrow('Only GitHub repositories are supported');
@@ -65,6 +68,7 @@ describe('GitHubRepo', () => {
         url: 'https://github.com/user/repo',
         owner: 'user',
         name: 'repo',
+        branch: 'main',
         defaultBranch: 'main',
       });
 
@@ -80,6 +84,7 @@ describe('GitHubRepo', () => {
         url: 'https://github.com/user/repo',
         owner: 'user',
         name: 'repo',
+        branch: 'main',
         defaultBranch: 'main',
       });
 

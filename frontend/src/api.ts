@@ -3,6 +3,7 @@ import type {
   CoverageReportDto,
   JobDto,
   JobListDto,
+  BulkJobDto,
   AiProvider,
   BranchesDto,
   AnalysisJobDto,
@@ -48,10 +49,6 @@ export async function listRepositories(): Promise<RepositoryDto[]> {
   return request<RepositoryDto[]>('/repositories');
 }
 
-export async function getRepository(id: string): Promise<RepositoryDto> {
-  return request<RepositoryDto>(`/repositories/${id}`);
-}
-
 export async function deleteRepository(id: string): Promise<void> {
   return request<void>(`/repositories/${id}`, { method: 'DELETE' });
 }
@@ -67,12 +64,16 @@ export async function getAnalysisJob(repoId: string, jobId: string): Promise<Ana
   return request<AnalysisJobDto>(`/repositories/${repoId}/analysis/${jobId}`);
 }
 
-export async function getLatestAnalysisJob(repoId: string): Promise<AnalysisJobDto | null> {
-  return request<AnalysisJobDto | null>(`/repositories/${repoId}/analysis`);
-}
-
-export async function getCoverage(repoId: string): Promise<CoverageReportDto> {
-  return request<CoverageReportDto>(`/repositories/${repoId}/coverage`);
+export async function getCoverage(
+  repoId: string,
+  page?: number,
+  limit?: number,
+): Promise<CoverageReportDto> {
+  const params = new URLSearchParams();
+  if (page) params.set('page', page.toString());
+  if (limit) params.set('limit', limit.toString());
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return request<CoverageReportDto>(`/repositories/${repoId}/coverage${query}`);
 }
 
 // Jobs API
@@ -92,10 +93,17 @@ export async function listJobs(repositoryId?: string): Promise<JobListDto> {
   return request<JobListDto>(`/jobs${query}`);
 }
 
-export async function getJob(id: string): Promise<JobDto> {
-  return request<JobDto>(`/jobs/${id}`);
-}
-
 export async function cancelJob(id: string): Promise<void> {
   return request<void>(`/jobs/${id}`, { method: 'DELETE' });
+}
+
+export async function createBulkJobs(
+  repositoryId: string,
+  fileIds: string[],
+  aiProvider: AiProvider = 'claude',
+): Promise<BulkJobDto> {
+  return request<BulkJobDto>('/jobs/bulk', {
+    method: 'POST',
+    body: JSON.stringify({ repositoryId, fileIds, aiProvider }),
+  });
 }

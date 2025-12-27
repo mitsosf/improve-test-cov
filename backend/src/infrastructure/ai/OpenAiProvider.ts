@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
-import { IAiProvider, TestGenerationContext, GeneratedTest } from '../../domain/ports/IAiProvider';
-import { AiProvider } from '../../domain/entities/ImprovementJob';
+import { IAiProvider, TestGenerationContext, GeneratedTest } from './IAiProvider';
+import { AiProvider } from '../../domain/entities/Job';
 
 /**
  * OpenAI provider for test generation
@@ -121,7 +121,6 @@ No test file exists yet.
 
     return new Promise((resolve, reject) => {
       console.log('[OpenAiProvider] Starting Codex CLI in agentic mode...');
-      console.log(`[OpenAiProvider] Working directory: ${workDir}`);
 
       const args = [
         'exec',
@@ -152,12 +151,7 @@ No test file exists yet.
       }, timeoutMs);
 
       proc.stdout.on('data', (data) => {
-        const chunk = data.toString();
-        stdout += chunk;
-        // Only log if it's substantial output
-        if (chunk.trim().length > 0) {
-          console.log('[OpenAiProvider] Received output...');
-        }
+        stdout += data.toString();
       });
 
       proc.stderr.on('data', (data) => {
@@ -167,10 +161,6 @@ No test file exists yet.
       proc.on('close', (code) => {
         clearTimeout(timeout);
         console.log(`[OpenAiProvider] CLI exited with code ${code}`);
-        console.log(`[OpenAiProvider] stdout (last 500 chars): ${stdout.slice(-500)}`);
-        if (stderr) {
-          console.log(`[OpenAiProvider] stderr: ${stderr.slice(-300)}`);
-        }
 
         // Check for authentication errors - fail fast with clear message
         if (stdout.includes('token_expired') || stdout.includes('401 Unauthorized')) {
@@ -183,7 +173,6 @@ No test file exists yet.
           const { readFileSync, unlinkSync, existsSync } = require('fs');
           if (existsSync(outputFile)) {
             const output = readFileSync(outputFile, 'utf-8');
-            console.log(`[OpenAiProvider] Output file content: ${output.slice(0, 300)}`);
             unlinkSync(outputFile);
             resolve(output || stdout);
             return;

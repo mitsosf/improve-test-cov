@@ -13,6 +13,7 @@ export class RepositoryResponseDto {
   id!: string;
   url!: string;
   name!: string;
+  branch!: string;
   defaultBranch!: string;
   lastAnalyzedAt!: Date | null;
   createdAt!: Date;
@@ -27,4 +28,5 @@ export class AnalyzeRepositoryDto {
 export class BranchResponseDto {
   branches!: string[];
   defaultBranch!: string;
+  allTracked!: boolean;
 }

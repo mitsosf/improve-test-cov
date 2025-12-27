@@ -1,8 +1,4 @@
-// Commands
-export * from './commands';
-
-// Queries
-export * from './queries';
-
 // Services
-export * from './services';
+export { JobProcessor, JobProgressCallback } from './services/JobProcessor';
+export { ImprovementService } from './services/ImprovementService';
+export { CoverageService, AnalyzeCoverageResult } from './services/CoverageService';

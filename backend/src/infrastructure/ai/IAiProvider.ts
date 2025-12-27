@@ -3,7 +3,7 @@
  * Infrastructure provides the adapter implementations (Claude, OpenAI, etc.)
  */
 
-import { AiProvider as AiProviderType } from '../entities/ImprovementJob';
+import { AiProvider as AiProviderType } from '../../domain/entities/Job';
 
 export interface TestFileExample {
   path: string;

@@ -95,6 +95,18 @@ cov status <job-id>
 - **Application**: Use cases, orchestration services
 - **Infrastructure**: Database, GitHub, AI providers, NestJS
 
+## Domain Glossary
+
+| Term | Definition |
+|------|------------|
+| **Repository** | A GitHub repository being tracked for coverage improvement |
+| **CoverageFile** | A TypeScript source file with its coverage metrics and uncovered lines |
+| **Job** | A background task (analysis or improvement) with status tracking |
+| **Analysis Job** | Clones repo, runs tests with coverage, stores results in database |
+| **Improvement Job** | Generates tests for a specific file via AI, creates GitHub PR |
+| **Coverage Threshold** | Minimum acceptable coverage percentage (default: 80%) |
+| **AI Provider** | Claude or OpenAI - generates test code targeting uncovered lines |
+
 ## How It Works
 
 1. **Analyze**: Clone repo, run tests with coverage, parse results

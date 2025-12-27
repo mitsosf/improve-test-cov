@@ -1,7 +1,7 @@
 import { simpleGit, SimpleGit, SimpleGitOptions } from 'simple-git';
 import { join } from 'path';
 import { mkdirSync, rmSync, existsSync } from 'fs';
-import { IGitHubService, CloneOptions, CommitAndPushOptions } from '../../domain/ports/IGitHubService';
+import { IGitHubService, CloneOptions, CommitAndPushOptions } from './IGitHubService';
 import { GitHubApiClient, PrInfo } from './GitHubApiClient';
 
 // Re-export types for backward compatibility

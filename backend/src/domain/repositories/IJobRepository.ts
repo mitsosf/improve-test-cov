@@ -1,17 +1,18 @@
-import { ImprovementJob } from '../entities/ImprovementJob';
+import { Job, JobType } from '../entities/Job';
 
 /**
- * Repository interface (port) for ImprovementJob entity persistence
+ * Repository interface (port) for unified Job entity persistence
  */
 export interface IJobRepository {
-  save(job: ImprovementJob): Promise<void>;
-  findById(id: string): Promise<ImprovementJob | null>;
-  findByRepositoryId(repositoryId: string): Promise<ImprovementJob[]>;
-  findByFileId(fileId: string): Promise<ImprovementJob[]>;
-  findPending(limit?: number): Promise<ImprovementJob[]>;
-  findPendingByRepositoryId(repositoryId: string): Promise<ImprovementJob | null>;
-  findRunning(): Promise<ImprovementJob[]>;
-  findAll(): Promise<ImprovementJob[]>;
+  save(job: Job): Promise<void>;
+  findById(id: string): Promise<Job | null>;
+  findByRepositoryId(repositoryId: string, type?: JobType): Promise<Job[]>;
+  findByFileId(fileId: string): Promise<Job[]>;
+  findPending(limit?: number, type?: JobType): Promise<Job[]>;
+  findPendingByRepositoryId(repositoryId: string, type?: JobType): Promise<Job | null>;
+  findLatestByRepositoryId(repositoryId: string, type?: JobType): Promise<Job | null>;
+  findRunning(type?: JobType): Promise<Job[]>;
+  findAll(type?: JobType): Promise<Job[]>;
   delete(id: string): Promise<void>;
 }
 

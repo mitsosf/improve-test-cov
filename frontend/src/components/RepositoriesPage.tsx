@@ -42,6 +42,8 @@ export function RepositoriesPage() {
 
           if (updated.status === 'completed' || updated.status === 'failed') {
             queryClient.invalidateQueries({ queryKey: ['repositories'] });
+            // Also invalidate coverage data so it's fresh when user navigates
+            queryClient.invalidateQueries({ queryKey: ['coverage', updated.repositoryId] });
           }
         } catch (err) {
           console.error('Failed to poll analysis job:', err);
@@ -102,7 +104,7 @@ export function RepositoriesPage() {
                       {repo.url}
                     </span>
                   </td>
-                  <td>{repo.defaultBranch}</td>
+                  <td>{repo.branch}</td>
                   <td>
                     {repo.lastAnalyzedAt
                       ? new Date(repo.lastAnalyzedAt).toLocaleString()
@@ -153,9 +155,15 @@ export function RepositoriesPage() {
                           </button>
                         );
                       })()}
-                      <Link to={`/coverage/${repo.id}`} className="btn">
-                        Coverage
-                      </Link>
+                      {repo.lastAnalyzedAt ? (
+                        <Link to={`/coverage/${repo.id}`} className="btn">
+                          Coverage
+                        </Link>
+                      ) : (
+                        <button className="btn" disabled title="Run analysis first">
+                          Coverage
+                        </button>
+                      )}
                       <button
                         className="btn btn-danger"
                         onClick={() => handleDelete(repo.id)}
@@ -186,6 +194,17 @@ function isValidGitHubUrl(url: string): boolean {
   return /^https?:\/\/github\.com\/[\w.-]+\/[\w.-]+/.test(url);
 }
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 function AddRepositoryModal({
   onClose,
   onSuccess,
@@ -197,20 +216,24 @@ function AddRepositoryModal({
   const [url, setUrl] = useState('');
   const [branch, setBranch] = useState('');
 
-  // Fetch branches when URL is a valid GitHub URL
+  // Debounce URL for API call
+  const debouncedUrl = useDebounce(url, 300);
+
+  // Fetch branches when URL is a valid GitHub URL (with debounce)
   const branchesQuery = useQuery({
-    queryKey: ['branches', url],
-    queryFn: () => api.getBranches(url),
-    enabled: isValidGitHubUrl(url),
+    queryKey: ['branches', debouncedUrl],
+    queryFn: () => api.getBranches(debouncedUrl),
+    enabled: isValidGitHubUrl(debouncedUrl),
     retry: false,
   });
 
   const branches = branchesQuery.data;
 
-  // Set default branch when branches are loaded
+  // Set default branch when branches are loaded (only if available)
   useEffect(() => {
-    if (branches && !branch) {
-      setBranch(branches.defaultBranch);
+    if (branches && branches.branches.length > 0 && !branch) {
+      // Pick first available branch (which should be default if available)
+      setBranch(branches.branches[0]);
     }
   }, [branches, branch]);
 
@@ -235,6 +258,8 @@ function AddRepositoryModal({
     }
   }
 
+  const allTracked = branches?.allTracked ?? false;
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
@@ -258,9 +283,13 @@ function AddRepositoryModal({
 
           <div className="form-group">
             <label className="form-label">Branch</label>
-            {branchesQuery.isLoading ? (
+            {branchesQuery.isLoading || (isValidGitHubUrl(url) && url !== debouncedUrl) ? (
               <div style={{ color: 'var(--text-secondary)', padding: '10px 0' }}>
                 Loading branches...
+              </div>
+            ) : allTracked ? (
+              <div style={{ color: 'var(--text-secondary)', padding: '10px 0' }}>
+                All branches are already tracked for this repository.
               </div>
             ) : branches && branches.branches.length > 0 ? (
               <select
@@ -293,7 +322,7 @@ function AddRepositoryModal({
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={mutation.isPending || branchesQuery.isLoading || !branch}
+              disabled={mutation.isPending || branchesQuery.isLoading || !branch || allTracked}
             >
               {mutation.isPending ? 'Adding...' : 'Add Repository'}
             </button>

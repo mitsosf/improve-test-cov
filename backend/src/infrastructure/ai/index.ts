@@ -1,4 +1,3 @@
-export { IAiProvider, TestGenerationContext, GeneratedTest, AI_PROVIDER } from './AiProvider';
+export { IAiProvider, TestGenerationContext, GeneratedTest, AI_PROVIDER, TestFileExample } from './IAiProvider';
 export { ClaudeProvider } from './ClaudeProvider';
 export { OpenAiProvider } from './OpenAiProvider';
-export { AiProviderFactory } from './AiProviderFactory';

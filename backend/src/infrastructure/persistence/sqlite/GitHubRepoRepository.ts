@@ -8,6 +8,7 @@ interface GitHubRepoRow {
   url: string;
   owner: string;
   name: string;
+  branch: string;
   default_branch: string;
   last_analyzed_at: string | null;
   created_at: string;
@@ -22,12 +23,13 @@ export class SqliteGitHubRepoRepository implements IGitHubRepoRepository {
 
   async save(repo: GitHubRepo): Promise<void> {
     const stmt = this.db.prepare(`
-      INSERT INTO repositories (id, url, owner, name, default_branch, last_analyzed_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO repositories (id, url, owner, name, branch, default_branch, last_analyzed_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         url = excluded.url,
         owner = excluded.owner,
         name = excluded.name,
+        branch = excluded.branch,
         default_branch = excluded.default_branch,
         last_analyzed_at = excluded.last_analyzed_at
     `);
@@ -37,6 +39,7 @@ export class SqliteGitHubRepoRepository implements IGitHubRepoRepository {
       repo.url,
       repo.owner,
       repo.name,
+      repo.branch,
       repo.defaultBranch,
       repo.lastAnalyzedAt?.toISOString() || null,
       repo.createdAt.toISOString(),
@@ -53,6 +56,18 @@ export class SqliteGitHubRepoRepository implements IGitHubRepoRepository {
     const stmt = this.db.prepare('SELECT * FROM repositories WHERE url = ?');
     const row = stmt.get(url) as GitHubRepoRow | undefined;
     return row ? this.mapToEntity(row) : null;
+  }
+
+  async findByUrlAndBranch(url: string, branch: string): Promise<GitHubRepo | null> {
+    const stmt = this.db.prepare('SELECT * FROM repositories WHERE url = ? AND branch = ?');
+    const row = stmt.get(url, branch) as GitHubRepoRow | undefined;
+    return row ? this.mapToEntity(row) : null;
+  }
+
+  async findBranchesByUrl(url: string): Promise<string[]> {
+    const stmt = this.db.prepare('SELECT branch FROM repositories WHERE url = ?');
+    const rows = stmt.all(url) as Array<{ branch: string }>;
+    return rows.map((r) => r.branch);
   }
 
   async findAll(): Promise<GitHubRepo[]> {
@@ -72,6 +87,7 @@ export class SqliteGitHubRepoRepository implements IGitHubRepoRepository {
       url: row.url,
       owner: row.owner,
       name: row.name,
+      branch: row.branch || row.default_branch, // Fallback for migration
       defaultBranch: row.default_branch,
       lastAnalyzedAt: row.last_analyzed_at ? new Date(row.last_analyzed_at) : null,
       createdAt: new Date(row.created_at),

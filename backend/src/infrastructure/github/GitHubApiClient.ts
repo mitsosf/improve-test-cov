@@ -5,7 +5,7 @@ import {
   BranchInfo,
   CreatePrParams,
   PrInfo,
-} from '../../domain/ports/IGitHubApiClient';
+} from './IGitHubApiClient';
 
 // Re-export types for backward compatibility
 export { RepoInfo, BranchInfo, CreatePrParams, PrInfo };
