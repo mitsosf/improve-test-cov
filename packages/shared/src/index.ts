@@ -24,6 +24,11 @@ export interface BranchesDto {
   allTracked: boolean;
 }
 
+export interface PaginatedRepositoriesDto {
+  repositories: RepositoryDto[];
+  pagination: PaginationDto;
+}
+
 // Coverage DTOs
 export type CoverageFileStatus = 'pending' | 'improving' | 'improved';
 

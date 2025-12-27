@@ -4,15 +4,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { RepositoryDto, AnalysisJobDto } from '@coverage-improver/shared';
 import * as api from '../api';
 
+const REPOS_PER_PAGE = 10;
+
 export function RepositoriesPage() {
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
   const [activeAnalysisJobs, setActiveAnalysisJobs] = useState<Record<string, AnalysisJobDto>>({});
+  const [page, setPage] = useState(1);
 
-  const { data: repositories = [], isLoading, error } = useQuery({
-    queryKey: ['repositories'],
-    queryFn: api.listRepositories,
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['repositories', page],
+    queryFn: () => api.listRepositoriesPaginated(page, REPOS_PER_PAGE),
   });
+
+  const repositories = data?.repositories ?? [];
+  const pagination = data?.pagination;
 
   const deleteMutation = useMutation({
     mutationFn: api.deleteRepository,
@@ -177,6 +183,39 @@ export function RepositoriesPage() {
               ))}
             </tbody>
           </table>
+
+          {pagination && pagination.totalPages > 1 && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '16px',
+              borderTop: '1px solid var(--border-color)',
+            }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                Showing {((page - 1) * REPOS_PER_PAGE) + 1}-{Math.min(page * REPOS_PER_PAGE, pagination.total)} of {pagination.total} repositories
+              </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className="btn"
+                  onClick={() => setPage(p => p - 1)}
+                  disabled={page <= 1}
+                >
+                  Previous
+                </button>
+                <span style={{ display: 'flex', alignItems: 'center', padding: '0 12px' }}>
+                  Page {page} of {pagination.totalPages}
+                </span>
+                <button
+                  className="btn"
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={page >= pagination.totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

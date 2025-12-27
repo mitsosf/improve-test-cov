@@ -12,7 +12,14 @@ import {
   BadRequestException,
   Inject,
 } from '@nestjs/common';
-import { CreateRepositoryDto, AnalyzeRepositoryDto, RepositoryResponseDto, BranchResponseDto, AnalysisJobResponseDto } from '../dto';
+import {
+  CreateRepositoryDto,
+  AnalyzeRepositoryDto,
+  RepositoryResponseDto,
+  BranchResponseDto,
+  AnalysisJobResponseDto,
+  PaginatedRepositoriesResponseDto,
+} from '../dto';
 import { CoverageReportResponseDto } from '../dto';
 import {
   Job,
@@ -63,9 +70,28 @@ export class RepositoriesController {
   }
 
   @Get()
-  async findAll(): Promise<RepositoryResponseDto[]> {
+  async findAll(
+    @Query('page') pageParam?: string,
+    @Query('limit') limitParam?: string,
+  ): Promise<RepositoryResponseDto[] | PaginatedRepositoriesResponseDto> {
+    const page = pageParam ? parseInt(pageParam, 10) : undefined;
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+
+    if (page && limit) {
+      const result = await this.repoRepository.findAllPaginated({ page, limit });
+      return {
+        repositories: result.items.map((r) => this.toResponse(r)),
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+          totalPages: result.totalPages,
+        },
+      };
+    }
+
     const repositories = await this.repoRepository.findAll();
-    return repositories.map(r => this.toResponse(r));
+    return repositories.map((r) => this.toResponse(r));
   }
 
   @Get('branches')

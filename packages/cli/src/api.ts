@@ -6,6 +6,7 @@ import type {
   CreateRepositoryRequest,
   CreateJobRequest,
   AiProvider,
+  PaginatedRepositoriesDto,
 } from '@coverage-improver/shared';
 
 let apiUrl = 'http://localhost:3000/api';
@@ -45,6 +46,15 @@ export async function createRepository(url: string, branch?: string): Promise<Re
 
 export async function listRepositories(): Promise<RepositoryDto[]> {
   return request<RepositoryDto[]>('/repositories');
+}
+
+export async function listRepositoriesPaginated(
+  page: number,
+  limit: number,
+): Promise<PaginatedRepositoriesDto> {
+  return request<PaginatedRepositoriesDto>(
+    `/repositories?page=${page}&limit=${limit}`,
+  );
 }
 
 export async function getRepository(id: string): Promise<RepositoryDto> {

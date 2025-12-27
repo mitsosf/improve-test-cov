@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import Table from 'cli-table3';
-import { listRepositories, getCoverage, setApiUrl } from '../api.js';
+import { listRepositoriesPaginated, getCoverage, setApiUrl } from '../api.js';
 
 export const listCommand = new Command('list')
   .description('List repositories or files below coverage threshold')
@@ -27,9 +27,14 @@ export const listCommand = new Command('list')
 
     try {
       if (options.repos) {
-        // List all repositories
-        const repos = await listRepositories();
-        spinner.succeed(`Found ${repos.length} repositories`);
+        // List all repositories with pagination
+        const page = parseInt(options.page, 10);
+        const limit = parseInt(options.limit, 10);
+        const result = await listRepositoriesPaginated(page, limit);
+        const repos = result.repositories;
+        const pagination = result.pagination;
+
+        spinner.succeed(`Found ${pagination.total} repositories`);
 
         if (repos.length === 0) {
           console.log(chalk.yellow('No repositories registered. Use `cov analyze <url>` to add one.'));
@@ -51,6 +56,20 @@ export const listCommand = new Command('list')
         }
 
         console.log(table.toString());
+
+        // Show pagination info
+        if (pagination.totalPages > 1) {
+          console.log();
+          console.log(
+            chalk.gray(
+              `Page ${pagination.page} of ${pagination.totalPages} ` +
+                `(${pagination.total} total repositories)`,
+            ),
+          );
+          if (pagination.page < pagination.totalPages) {
+            console.log(chalk.gray(`Use --page ${pagination.page + 1} to see next page`));
+          }
+        }
       } else if (options.repoId) {
         // List files for a specific repository
         const threshold = parseInt(options.threshold, 10);

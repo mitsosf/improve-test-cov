@@ -6,6 +6,7 @@ import type {
   AiProvider,
   BranchesDto,
   AnalysisJobDto,
+  PaginatedRepositoriesDto,
 } from '@coverage-improver/shared';
 
 const API_BASE = '/api';
@@ -46,6 +47,15 @@ export async function createRepository(url: string, branch?: string): Promise<Re
 
 export async function listRepositories(): Promise<RepositoryDto[]> {
   return request<RepositoryDto[]>('/repositories');
+}
+
+export async function listRepositoriesPaginated(
+  page: number,
+  limit: number,
+): Promise<PaginatedRepositoriesDto> {
+  return request<PaginatedRepositoriesDto>(
+    `/repositories?page=${page}&limit=${limit}`,
+  );
 }
 
 export async function deleteRepository(id: string): Promise<void> {

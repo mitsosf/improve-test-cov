@@ -1,4 +1,5 @@
 import { GitHubRepo } from '../entities';
+import { PaginationOptions, PaginatedResult } from './ICoverageFileRepository';
 
 /**
  * Repository interface (port) for GitHubRepo entity persistence
@@ -10,6 +11,7 @@ export interface IGitHubRepoRepository {
   findByUrlAndBranch(url: string, branch: string): Promise<GitHubRepo | null>;
   findBranchesByUrl(url: string): Promise<string[]>;
   findAll(): Promise<GitHubRepo[]>;
+  findAllPaginated(options: PaginationOptions): Promise<PaginatedResult<GitHubRepo>>;
   delete(id: string): Promise<void>;
 }
 

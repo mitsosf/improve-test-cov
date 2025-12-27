@@ -20,4 +20,5 @@ export class AnalyzeRepositoryDto {
 export type {
   RepositoryDto as RepositoryResponseDto,
   BranchesDto as BranchResponseDto,
+  PaginatedRepositoriesDto as PaginatedRepositoriesResponseDto,
 } from '@coverage-improver/shared';

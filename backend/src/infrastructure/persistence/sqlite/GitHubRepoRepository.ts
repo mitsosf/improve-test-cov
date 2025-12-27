@@ -1,5 +1,10 @@
 import Database from 'better-sqlite3';
-import { GitHubRepo, IGitHubRepoRepository } from '../../../domain';
+import {
+  GitHubRepo,
+  IGitHubRepoRepository,
+  PaginationOptions,
+  PaginatedResult,
+} from '../../../domain';
 import { getDatabase } from './database';
 
 interface GitHubRepoRow {
@@ -73,6 +78,31 @@ export class SqliteGitHubRepoRepository implements IGitHubRepoRepository {
     const stmt = this.db.prepare('SELECT * FROM repositories ORDER BY created_at DESC');
     const rows = stmt.all() as GitHubRepoRow[];
     return rows.map((row) => this.mapToEntity(row));
+  }
+
+  async findAllPaginated(options: PaginationOptions): Promise<PaginatedResult<GitHubRepo>> {
+    const { page, limit } = options;
+    const offset = (page - 1) * limit;
+
+    // Get total count
+    const countStmt = this.db.prepare('SELECT COUNT(*) as count FROM repositories');
+    const { count } = countStmt.get() as { count: number };
+
+    // Get paginated results
+    const stmt = this.db.prepare(`
+      SELECT * FROM repositories
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `);
+    const rows = stmt.all(limit, offset) as GitHubRepoRow[];
+
+    return {
+      items: rows.map((row) => this.mapToEntity(row)),
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil(count / limit),
+    };
   }
 
   async delete(id: string): Promise<void> {
