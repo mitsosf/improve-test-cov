@@ -1,6 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { CoveragePercentage } from '../value-objects/CoveragePercentage';
-import { FilePath } from '../value-objects/FilePath';
+import { CoveragePercentage, FilePath } from '../value-objects';
 
 export type CoverageFileStatus = 'pending' | 'improving' | 'improved';
 

@@ -1,6 +1,5 @@
 import Database from 'better-sqlite3';
-import { GitHubRepo } from '../../../domain/entities/GitHubRepo';
-import { IGitHubRepoRepository } from '../../../domain/repositories/IGitHubRepoRepository';
+import { GitHubRepo, IGitHubRepoRepository } from '../../../domain';
 import { getDatabase } from './database';
 
 interface GitHubRepoRow {

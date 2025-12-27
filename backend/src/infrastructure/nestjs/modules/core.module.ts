@@ -1,22 +1,28 @@
 import { Module, Global, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { createDatabase } from '../../persistence/sqlite/database';
-import { SqliteGitHubRepoRepository } from '../../persistence/sqlite/GitHubRepoRepository';
-import { SqliteCoverageFileRepository } from '../../persistence/sqlite/CoverageFileRepository';
-import { SqliteJobRepository } from '../../persistence/sqlite/JobRepository';
-import { GitHubService } from '../../github/GitHubService';
-import { GitHubApiClient } from '../../github/GitHubApiClient';
-import { CoverageParser } from '../../coverage/CoverageParser';
-import { CommandRunner } from '../../runner/CommandRunner';
-import { JobProcessor } from '../../../application/services/JobProcessor';
-// Domain repository symbols
-import { GITHUB_REPO_REPOSITORY } from '../../../domain/repositories/IGitHubRepoRepository';
-import { COVERAGE_FILE_REPOSITORY } from '../../../domain/repositories/ICoverageFileRepository';
-import { JOB_REPOSITORY } from '../../../domain/repositories/IJobRepository';
-// Infrastructure port symbols
-import { GITHUB_SERVICE } from '../../github';
-import { GITHUB_API_CLIENT } from '../../github';
-import { COVERAGE_PARSER } from '../../coverage';
-import { COMMAND_RUNNER } from '../../runner';
+import {
+  // Persistence
+  createDatabase,
+  SqliteGitHubRepoRepository,
+  SqliteCoverageFileRepository,
+  SqliteJobRepository,
+  // GitHub
+  GitHubService,
+  GitHubApiClient,
+  GITHUB_SERVICE,
+  GITHUB_API_CLIENT,
+  // Coverage
+  CoverageParser,
+  COVERAGE_PARSER,
+  // Runner
+  CommandRunner,
+  COMMAND_RUNNER,
+} from '../..';
+import { JobProcessor } from '../../../application';
+import {
+  GITHUB_REPO_REPOSITORY,
+  COVERAGE_FILE_REPOSITORY,
+  JOB_REPOSITORY,
+} from '../../../domain';
 import { RepositoriesController, JobsController, HealthController } from '../controllers';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -135,7 +141,6 @@ export class CoreModule implements OnModuleInit, OnModuleDestroy {
     if (this.jobProcessorInterval) {
       clearInterval(this.jobProcessorInterval);
     }
-    this.jobProcessor.stopProcessing();
   }
 
   private startJobProcessor() {

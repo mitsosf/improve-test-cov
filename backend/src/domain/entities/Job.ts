@@ -1,6 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { JobStatus } from '../value-objects/JobStatus';
-import { GitHubPrUrl } from '../value-objects/GitHubPrUrl';
+import { GitHubPrUrl, JobStatus } from '../value-objects';
 
 export type JobType = 'analysis' | 'improvement';
 export type AiProvider = 'claude' | 'openai';

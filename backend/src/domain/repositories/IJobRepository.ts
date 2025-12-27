@@ -1,4 +1,4 @@
-import { Job, JobType } from '../entities/Job';
+import { Job, JobType } from '../entities';
 
 /**
  * Repository interface (port) for unified Job entity persistence

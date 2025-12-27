@@ -1,8 +1,12 @@
 import Database from 'better-sqlite3';
-import { Job, JobType, AiProvider } from '../../../domain/entities/Job';
-import { IJobRepository } from '../../../domain/repositories/IJobRepository';
-import { JobStatus } from '../../../domain/value-objects/JobStatus';
-import { GitHubPrUrl } from '../../../domain/value-objects/GitHubPrUrl';
+import {
+  Job,
+  JobType,
+  AiProvider,
+  IJobRepository,
+  JobStatus,
+  GitHubPrUrl,
+} from '../../../domain';
 import { getDatabase } from './database';
 
 interface JobRow {

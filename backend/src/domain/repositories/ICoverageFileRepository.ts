@@ -1,4 +1,4 @@
-import { CoverageFile } from '../entities/CoverageFile';
+import { CoverageFile } from '../entities';
 
 export interface PaginationOptions {
   page: number;

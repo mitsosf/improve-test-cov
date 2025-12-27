@@ -1,4 +1,4 @@
-import { GitHubRepo } from '../entities/GitHubRepo';
+import { GitHubRepo } from '../entities';
 
 /**
  * Repository interface (port) for GitHubRepo entity persistence

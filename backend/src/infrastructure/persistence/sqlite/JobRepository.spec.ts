@@ -1,13 +1,17 @@
-import { Job } from '../../../domain/entities/Job';
-import { GitHubRepo } from '../../../domain/entities/GitHubRepo';
-import { CoverageFile } from '../../../domain/entities/CoverageFile';
-import { CoveragePercentage } from '../../../domain/value-objects/CoveragePercentage';
-import { FilePath } from '../../../domain/value-objects/FilePath';
-import { GitHubPrUrl } from '../../../domain/value-objects/GitHubPrUrl';
-import { createTestDatabase } from './database';
-import { SqliteJobRepository } from './JobRepository';
-import { SqliteGitHubRepoRepository } from './GitHubRepoRepository';
-import { SqliteCoverageFileRepository } from './CoverageFileRepository';
+import {
+  Job,
+  GitHubRepo,
+  CoverageFile,
+  CoveragePercentage,
+  FilePath,
+  GitHubPrUrl,
+} from '../../../domain';
+import {
+  createTestDatabase,
+  SqliteJobRepository,
+  SqliteGitHubRepoRepository,
+  SqliteCoverageFileRepository,
+} from './';
 
 describe('SqliteJobRepository', () => {
   let jobRepo: SqliteJobRepository;

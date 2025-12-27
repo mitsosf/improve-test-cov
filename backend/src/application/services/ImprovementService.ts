@@ -1,9 +1,9 @@
 import {
+  AiProvider,
   Job,
   IJobRepository,
   ICoverageFileRepository,
 } from '../../domain';
-import { AiProvider } from '../../domain/entities/Job';
 
 /**
  * Application service for test improvement use cases.

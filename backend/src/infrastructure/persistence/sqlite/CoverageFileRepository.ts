@@ -1,12 +1,13 @@
 import Database from 'better-sqlite3';
-import { CoverageFile, CoverageFileStatus } from '../../../domain/entities/CoverageFile';
 import {
+  CoverageFile,
+  CoverageFileStatus,
   ICoverageFileRepository,
   PaginationOptions,
   PaginatedResult,
-} from '../../../domain/repositories/ICoverageFileRepository';
-import { CoveragePercentage } from '../../../domain/value-objects/CoveragePercentage';
-import { FilePath } from '../../../domain/value-objects/FilePath';
+  CoveragePercentage,
+  FilePath,
+} from '../../../domain';
 import { getDatabase } from './database';
 
 interface CoverageFileRow {

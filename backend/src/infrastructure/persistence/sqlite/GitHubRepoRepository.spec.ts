@@ -1,6 +1,5 @@
-import { GitHubRepo } from '../../../domain/entities/GitHubRepo';
-import { createTestDatabase } from './database';
-import { SqliteGitHubRepoRepository } from './GitHubRepoRepository';
+import { GitHubRepo } from '../../../domain';
+import { createTestDatabase, SqliteGitHubRepoRepository } from './';
 
 describe('SqliteGitHubRepoRepository', () => {
   let repo: SqliteGitHubRepoRepository;
