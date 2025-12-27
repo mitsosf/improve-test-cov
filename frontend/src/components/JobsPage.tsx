@@ -58,7 +58,7 @@ export function JobsPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>File</th>
+                <th>Files</th>
                 <th>Repository</th>
                 <th>Provider</th>
                 <th>Status</th>
@@ -70,9 +70,22 @@ export function JobsPage() {
               {jobs.map((job: JobDto) => (
                 <tr key={job.id}>
                   <td>
-                    <span style={{ fontFamily: 'monospace', fontSize: '13px' }}>
-                      {job.filePath}
-                    </span>
+                    <div style={{ fontFamily: 'monospace', fontSize: '13px' }}>
+                      {job.fileCount === 1 ? (
+                        job.filePaths[0]
+                      ) : (
+                        <details>
+                          <summary style={{ cursor: 'pointer' }}>
+                            {job.fileCount} files
+                          </summary>
+                          <ul style={{ margin: '8px 0 0 0', paddingLeft: '16px' }}>
+                            {job.filePaths.map((path, i) => (
+                              <li key={i}>{path}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </div>
                   </td>
                   <td>{job.repositoryName}</td>
                   <td>

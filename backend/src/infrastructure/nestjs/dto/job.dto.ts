@@ -1,23 +1,12 @@
-import { IsString, IsUUID, IsOptional, IsEnum, IsArray } from 'class-validator';
+import { IsUUID, IsOptional, IsEnum, IsArray, ArrayMinSize } from 'class-validator';
 import { AiProvider } from '../../../domain/entities/Job';
 
 export class CreateJobDto {
   @IsUUID()
   repositoryId!: string;
 
-  @IsUUID()
-  fileId!: string;
-
-  @IsEnum(['claude', 'openai'])
-  @IsOptional()
-  aiProvider?: AiProvider;
-}
-
-export class CreateBulkJobDto {
-  @IsUUID()
-  repositoryId!: string;
-
   @IsArray()
+  @ArrayMinSize(1)
   @IsUUID('4', { each: true })
   fileIds!: string[];
 
@@ -30,8 +19,9 @@ export class JobResponseDto {
   id!: string;
   repositoryId!: string;
   repositoryName!: string;
-  fileId!: string;
-  filePath!: string;
+  fileIds!: string[];
+  filePaths!: string[];
+  fileCount!: number;
   status!: string;
   aiProvider!: string;
   progress!: number;
@@ -44,11 +34,4 @@ export class JobResponseDto {
 export class JobListResponseDto {
   jobs!: JobResponseDto[];
   total!: number;
-}
-
-export class BulkJobResponseDto {
-  jobs!: JobResponseDto[];
-  total!: number;
-  created!: number;
-  skipped!: number;
 }

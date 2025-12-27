@@ -27,7 +27,17 @@ export const statusCommand = new Command('status')
         console.log(chalk.gray('─'.repeat(50)));
         console.log(`  ID:         ${job.id}`);
         console.log(`  Repository: ${job.repositoryName}`);
-        console.log(`  File:       ${job.filePath}`);
+        console.log(`  Files:      ${job.fileCount}`);
+        if (job.fileCount <= 5) {
+          for (const path of job.filePaths) {
+            console.log(`              - ${path}`);
+          }
+        } else {
+          for (const path of job.filePaths.slice(0, 3)) {
+            console.log(`              - ${path}`);
+          }
+          console.log(chalk.gray(`              ... and ${job.fileCount - 3} more`));
+        }
         console.log(`  Provider:   ${job.aiProvider}`);
         console.log(`  Status:     ${getStatusColor(job.status)(job.status)}`);
         console.log(`  Progress:   ${getProgressBar(job.progress)}`);
@@ -58,7 +68,7 @@ export const statusCommand = new Command('status')
         const table = new Table({
           head: [
             chalk.cyan('ID'),
-            chalk.cyan('File'),
+            chalk.cyan('Files'),
             chalk.cyan('Provider'),
             chalk.cyan('Status'),
             chalk.cyan('Progress'),
@@ -67,9 +77,12 @@ export const statusCommand = new Command('status')
         });
 
         for (const job of jobs) {
+          const filesDisplay = job.fileCount === 1
+            ? (job.filePaths[0].length > 28 ? '...' + job.filePaths[0].slice(-25) : job.filePaths[0])
+            : `${job.fileCount} files`;
           table.push([
             job.id,
-            job.filePath.length > 28 ? '...' + job.filePath.slice(-25) : job.filePath,
+            filesDisplay,
             job.aiProvider,
             getStatusColor(job.status)(job.status),
             `${job.progress}%`,

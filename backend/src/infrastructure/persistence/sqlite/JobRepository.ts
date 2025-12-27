@@ -19,9 +19,9 @@ interface JobRow {
   branch: string | null;
   files_found: number;
   files_below_threshold: number;
-  // Improvement-specific
-  file_id: string | null;
-  file_path: string | null;
+  // Improvement-specific (JSON arrays)
+  file_ids: string | null;
+  file_paths: string | null;
   ai_provider: string | null;
   pr_url: string | null;
 }
@@ -38,7 +38,7 @@ export class SqliteJobRepository implements IJobRepository {
       INSERT INTO jobs (
         id, type, repository_id, status, progress, error, created_at, updated_at,
         repository_url, branch, files_found, files_below_threshold,
-        file_id, file_path, ai_provider, pr_url
+        file_ids, file_paths, ai_provider, pr_url
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
@@ -64,8 +64,8 @@ export class SqliteJobRepository implements IJobRepository {
       job.branch,
       job.filesFound,
       job.filesBelowThreshold,
-      job.fileId,
-      job.filePath,
+      JSON.stringify(job.fileIds),
+      JSON.stringify(job.filePaths),
       job.aiProvider,
       job.prUrl?.value || null,
     );
@@ -87,8 +87,13 @@ export class SqliteJobRepository implements IJobRepository {
   }
 
   async findByFileId(fileId: string): Promise<Job[]> {
-    const stmt = this.db.prepare('SELECT * FROM jobs WHERE file_id = ? ORDER BY created_at DESC');
-    const rows = stmt.all(fileId) as JobRow[];
+    // Search within JSON array for the fileId
+    const stmt = this.db.prepare(`
+      SELECT * FROM jobs
+      WHERE file_ids LIKE ?
+      ORDER BY created_at DESC
+    `);
+    const rows = stmt.all(`%"${fileId}"%`) as JobRow[];
     return rows.map((row) => this.mapToEntity(row));
   }
 
@@ -166,9 +171,9 @@ export class SqliteJobRepository implements IJobRepository {
       branch: row.branch || undefined,
       filesFound: row.files_found,
       filesBelowThreshold: row.files_below_threshold,
-      // Improvement-specific
-      fileId: row.file_id || undefined,
-      filePath: row.file_path || undefined,
+      // Improvement-specific (parse JSON arrays)
+      fileIds: row.file_ids ? JSON.parse(row.file_ids) : [],
+      filePaths: row.file_paths ? JSON.parse(row.file_paths) : [],
       aiProvider: row.ai_provider as AiProvider | undefined,
       prUrl: row.pr_url ? GitHubPrUrl.create(row.pr_url) : null,
     });

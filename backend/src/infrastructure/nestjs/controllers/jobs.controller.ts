@@ -12,7 +12,7 @@ import {
   Inject,
   Query,
 } from '@nestjs/common';
-import { CreateJobDto, CreateBulkJobDto, JobResponseDto, JobListResponseDto, BulkJobResponseDto } from '../dto';
+import { CreateJobDto, JobResponseDto, JobListResponseDto } from '../dto';
 import {
   Job,
   IJobRepository,
@@ -45,7 +45,7 @@ export class JobsController {
     try {
       const result = await this.improvementService.startImprovement(
         dto.repositoryId,
-        dto.fileId,
+        dto.fileIds,
         dto.aiProvider,
       );
       return this.toResponse(result.job);
@@ -55,39 +55,6 @@ export class JobsController {
       }
       throw error;
     }
-  }
-
-  @Post('bulk')
-  @HttpCode(HttpStatus.CREATED)
-  async createBulk(@Body() dto: CreateBulkJobDto): Promise<BulkJobResponseDto> {
-    const jobs: JobResponseDto[] = [];
-    let skipped = 0;
-
-    for (const fileId of dto.fileIds) {
-      try {
-        const result = await this.improvementService.startImprovement(
-          dto.repositoryId,
-          fileId,
-          dto.aiProvider || 'claude',
-        );
-
-        if (result.isExisting) {
-          skipped++;
-        }
-
-        jobs.push(await this.toResponse(result.job));
-      } catch (error) {
-        // Log error but continue with other files
-        console.error(`Failed to create job for file ${fileId}:`, error);
-      }
-    }
-
-    return {
-      jobs,
-      total: dto.fileIds.length,
-      created: jobs.length - skipped,
-      skipped,
-    };
   }
 
   @Get()
@@ -150,8 +117,9 @@ export class JobsController {
       id: job.id,
       repositoryId: job.repositoryId,
       repositoryName: repo?.fullName || 'Unknown',
-      fileId: job.fileId || '',
-      filePath: job.filePath || '',
+      fileIds: job.fileIds,
+      filePaths: job.filePaths,
+      fileCount: job.fileCount,
       status: job.status.value,
       aiProvider: job.aiProvider || 'claude',
       progress: job.progress,

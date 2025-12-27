@@ -60,8 +60,9 @@ export interface JobDto {
   id: string;
   repositoryId: string;
   repositoryName: string;
-  fileId: string;
-  filePath: string;
+  fileIds: string[];
+  filePaths: string[];
+  fileCount: number;
   status: JobStatus;
   progress: number;
   aiProvider: AiProvider;
@@ -73,12 +74,6 @@ export interface JobDto {
 
 export interface CreateJobRequest {
   repositoryId: string;
-  fileId: string;
-  aiProvider?: AiProvider;
-}
-
-export interface CreateBulkJobRequest {
-  repositoryId: string;
   fileIds: string[];
   aiProvider?: AiProvider;
 }
@@ -86,13 +81,6 @@ export interface CreateBulkJobRequest {
 export interface JobListDto {
   jobs: JobDto[];
   total: number;
-}
-
-export interface BulkJobDto {
-  jobs: JobDto[];
-  total: number;
-  created: number;
-  skipped: number;
 }
 
 // Analysis Job DTOs

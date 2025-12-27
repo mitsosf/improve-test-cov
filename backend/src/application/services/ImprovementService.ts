@@ -16,40 +16,53 @@ export class ImprovementService {
   ) {}
 
   /**
-   * Start a test improvement job for a file.
-   * Returns existing active job if one exists.
+   * Start a test improvement job for one or more files.
+   * Returns existing active job if one exists for any of the files.
    */
   async startImprovement(
     repositoryId: string,
-    fileId: string,
+    fileIds: string[],
     aiProvider: AiProvider = 'claude',
   ): Promise<{ job: Job; isExisting: boolean }> {
-    // Validate coverage file exists
-    const coverageFile = await this.coverageFileRepo.findById(fileId);
-    if (!coverageFile) {
-      throw new Error(`Coverage file not found: ${fileId}`);
+    if (fileIds.length === 0) {
+      throw new Error('At least one file is required');
     }
 
-    // Check for existing pending/running job for this file
-    const existingJobs = await this.jobRepo.findByFileId(fileId);
-    const activeJob = existingJobs.find(j =>
-      j.status.value === 'pending' || j.status.value === 'running'
+    // Validate all coverage files exist and get their paths
+    const coverageFiles = await Promise.all(
+      fileIds.map(async (id) => {
+        const file = await this.coverageFileRepo.findById(id);
+        if (!file) {
+          throw new Error(`Coverage file not found: ${id}`);
+        }
+        return file;
+      })
     );
-    if (activeJob) {
-      return { job: activeJob, isExisting: true };
+
+    // Check for existing pending/running job for any of these files
+    for (const fileId of fileIds) {
+      const existingJobs = await this.jobRepo.findByFileId(fileId);
+      const activeJob = existingJobs.find(j =>
+        j.status.value === 'pending' || j.status.value === 'running'
+      );
+      if (activeJob) {
+        return { job: activeJob, isExisting: true };
+      }
     }
 
-    // Create new improvement job
+    // Create new improvement job with all files
     const job = Job.createImprovement({
       repositoryId,
-      fileId,
-      filePath: coverageFile.path.value,
+      fileIds,
+      filePaths: coverageFiles.map(f => f.path.value),
       aiProvider,
     });
 
-    // Mark file as improving
-    coverageFile.markAsImproving();
-    await this.coverageFileRepo.save(coverageFile);
+    // Mark all files as improving
+    for (const coverageFile of coverageFiles) {
+      coverageFile.markAsImproving();
+      await this.coverageFileRepo.save(coverageFile);
+    }
     await this.jobRepo.save(job);
 
     return { job, isExisting: false };
@@ -72,8 +85,8 @@ export class ImprovementService {
     await this.jobRepo.save(job);
 
     // Reset file status if this was an improvement job
-    if (job.fileId) {
-      const coverageFile = await this.coverageFileRepo.findById(job.fileId);
+    for (const fileId of job.fileIds) {
+      const coverageFile = await this.coverageFileRepo.findById(fileId);
       if (coverageFile) {
         coverageFile.resetToPending();
         await this.coverageFileRepo.save(coverageFile);

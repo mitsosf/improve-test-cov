@@ -33,21 +33,12 @@ export function CoveragePage() {
   });
 
   const improveMutation = useMutation({
-    mutationFn: ({ fileId, provider }: { fileId: string; provider: AiProvider }) =>
-      api.createJob(repoId!, fileId, provider),
+    mutationFn: ({ fileIds, provider }: { fileIds: string[]; provider: AiProvider }) =>
+      api.createJob(repoId!, fileIds, provider),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['coverage', repoId] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       setShowImproveModal(null);
-    },
-  });
-
-  const bulkImproveMutation = useMutation({
-    mutationFn: ({ fileIds, provider }: { fileIds: string[]; provider: AiProvider }) =>
-      api.createBulkJobs(repoId!, fileIds, provider),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['coverage', repoId] });
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
       setSelectedFiles(new Set());
       setShowBulkModal(false);
     },
@@ -291,7 +282,7 @@ export function CoveragePage() {
               <button
                 className="btn btn-primary"
                 style={{ justifyContent: 'center' }}
-                onClick={() => improveMutation.mutate({ fileId: showImproveModal.fileId, provider: 'claude' })}
+                onClick={() => improveMutation.mutate({ fileIds: [showImproveModal.fileId], provider: 'claude' })}
                 disabled={improveMutation.isPending}
               >
                 Use Claude
@@ -299,7 +290,7 @@ export function CoveragePage() {
               <button
                 className="btn"
                 style={{ justifyContent: 'center' }}
-                onClick={() => improveMutation.mutate({ fileId: showImproveModal.fileId, provider: 'openai' })}
+                onClick={() => improveMutation.mutate({ fileIds: [showImproveModal.fileId], provider: 'openai' })}
                 disabled={improveMutation.isPending}
               >
                 Use OpenAI
@@ -321,33 +312,33 @@ export function CoveragePage() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h3 className="modal-title">Improve {selectedFiles.size} Files</h3>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
-              Generate tests for {selectedFiles.size} selected file{selectedFiles.size > 1 ? 's' : ''}
+              Generate tests for {selectedFiles.size} selected file{selectedFiles.size > 1 ? 's' : ''} in a single job
             </p>
 
-            {bulkImproveMutation.error && (
-              <div className="error">{(bulkImproveMutation.error as Error).message}</div>
+            {improveMutation.error && (
+              <div className="error">{(improveMutation.error as Error).message}</div>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <button
                 className="btn btn-primary"
                 style={{ justifyContent: 'center' }}
-                onClick={() => bulkImproveMutation.mutate({
+                onClick={() => improveMutation.mutate({
                   fileIds: Array.from(selectedFiles),
                   provider: 'claude',
                 })}
-                disabled={bulkImproveMutation.isPending}
+                disabled={improveMutation.isPending}
               >
-                {bulkImproveMutation.isPending ? 'Creating jobs...' : 'Use Claude'}
+                {improveMutation.isPending ? 'Creating job...' : 'Use Claude'}
               </button>
               <button
                 className="btn"
                 style={{ justifyContent: 'center' }}
-                onClick={() => bulkImproveMutation.mutate({
+                onClick={() => improveMutation.mutate({
                   fileIds: Array.from(selectedFiles),
                   provider: 'openai',
                 })}
-                disabled={bulkImproveMutation.isPending}
+                disabled={improveMutation.isPending}
               >
                 Use OpenAI
               </button>

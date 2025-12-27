@@ -10,17 +10,19 @@ export interface TestFileExample {
   content: string;
 }
 
-export interface TestGenerationContext {
+export interface FileToImprove {
   filePath: string;
   fileContent: string;
   uncoveredLines: number[];
-  existingTestPath?: string;
-  existingTestContent?: string;
-  projectDir?: string;
-  exampleTestFiles?: TestFileExample[];
+}
+
+export interface TestGenerationContext {
+  files: FileToImprove[];
+  projectDir: string;
 }
 
 export interface GeneratedTest {
+  // Not used anymore - AI agent writes files directly
   testContent: string;
   testFilePath: string;
 }

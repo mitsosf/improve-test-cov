@@ -236,17 +236,24 @@ export class JobProcessor {
     try {
       job.start();
       await this.jobRepo.save(job);
-      this.emitProgress(job.id, 5, 'Job started');
+      const fileCount = job.fileCount;
+      this.emitProgress(job.id, 5, `Starting improvement for ${fileCount} file${fileCount > 1 ? 's' : ''}`);
 
       const repository = await this.repoRepository.findById(job.repositoryId);
       if (!repository) {
         throw new Error(`Repository not found: ${job.repositoryId}`);
       }
 
-      const coverageFile = await this.coverageFileRepo.findById(job.fileId!);
-      if (!coverageFile) {
-        throw new Error(`Coverage file not found: ${job.fileId}`);
-      }
+      // Load all coverage files
+      const coverageFiles = await Promise.all(
+        job.fileIds.map(async (id) => {
+          const file = await this.coverageFileRepo.findById(id);
+          if (!file) {
+            throw new Error(`Coverage file not found: ${id}`);
+          }
+          return file;
+        })
+      );
 
       await this.updateAndSaveProgress(job, 10, 'Cloning repository');
 
@@ -258,8 +265,9 @@ export class JobProcessor {
       });
 
       await this.updateAndSaveProgress(job, 15, 'Installing dependencies');
-      const projectDir = coverageFile.projectDir
-        ? join(clonePath, coverageFile.projectDir)
+      // Use first file's project dir (they should all be in the same project)
+      const projectDir = coverageFiles[0].projectDir
+        ? join(clonePath, coverageFiles[0].projectDir)
         : clonePath;
 
       const packageManager = this.commandRunner.detectPackageManager(projectDir);
@@ -267,74 +275,73 @@ export class JobProcessor {
 
       await this.updateAndSaveProgress(job, 20, 'Creating branch');
 
-      const branchName = this.githubService.generateBranchName(coverageFile.path.value);
+      // Generate branch name from first file, or use generic for multi-file
+      const branchName = fileCount === 1
+        ? this.githubService.generateBranchName(coverageFiles[0].path.value)
+        : this.githubService.generateBranchName(`${fileCount}-files`);
       await this.githubService.createBranch(clonePath, branchName);
 
-      const sourceFilePath = join(clonePath, coverageFile.path.value);
-      if (!existsSync(sourceFilePath)) {
-        throw new Error(`Source file not found: ${coverageFile.path.value}`);
+      // Prepare file contexts for AI
+      const filesToImprove = coverageFiles.map(cf => {
+        const sourceFilePath = join(clonePath!, cf.path.value);
+        if (!existsSync(sourceFilePath)) {
+          throw new Error(`Source file not found: ${cf.path.value}`);
+        }
+        return {
+          filePath: cf.path.value,
+          fileContent: readFileSync(sourceFilePath, 'utf-8'),
+          uncoveredLines: cf.uncoveredLines,
+        };
+      });
+
+      await this.updateAndSaveProgress(job, 30, `Generating tests for ${fileCount} file${fileCount > 1 ? 's' : ''}`);
+
+      // Get AI provider and generate tests for all files
+      const aiProvider = this.getAiProvider(job.aiProvider!);
+      await aiProvider.generateTests({
+        files: filesToImprove,
+        projectDir: clonePath,
+      });
+
+      await this.updateAndSaveProgress(job, 50, 'Validating generated tests');
+
+      // Validate that test files were created
+      const changedFiles = this.getChangedFiles(clonePath);
+      const testFiles = changedFiles.filter(f => this.isTestFile(f));
+
+      if (testFiles.length === 0) {
+        throw new Error('AI failed to create any test files');
       }
-      const sourceContent = readFileSync(sourceFilePath, 'utf-8');
 
-      const testFilePath = this.findTestFile(clonePath, coverageFile.path.value);
-
-      // Iterative test generation loop
-      let attempt = 0;
-      let currentCoverage = coverageFile.coveragePercentage.value;
-      let generatedTestPath: string | null = null;
-      let currentUncoveredLines = [...coverageFile.uncoveredLines];
-
-      while (attempt < this.maxRetries && currentCoverage < this.coverageThreshold) {
-        attempt++;
-        const progressBase = 25 + (attempt - 1) * 20;
-
-        await this.updateAndSaveProgress(job, progressBase, `Generating tests (attempt ${attempt}/${this.maxRetries})`);
-
-        // Get AI provider (inline, no factory needed)
-        const aiProvider = this.getAiProvider(job.aiProvider!);
-
-        const currentTestPath = generatedTestPath || testFilePath;
-
-        await aiProvider.generateTests({
-          filePath: coverageFile.path.value,
-          fileContent: sourceContent,
-          uncoveredLines: currentUncoveredLines,
-          existingTestPath: currentTestPath,
-          projectDir: clonePath,
-        });
-
-        const newTestFiles = this.getChangedFiles(clonePath).filter(f => this.isTestFile(f));
-        const expectedTestPath = testFilePath || coverageFile.path.value.replace('.ts', '.test.ts');
-        const fullTestPath = join(clonePath, expectedTestPath);
-
-        if (!existsSync(fullTestPath) && newTestFiles.length === 0) {
-          if (attempt < this.maxRetries) continue;
-          throw new Error('AI failed to create test file after all attempts');
-        }
-
-        generatedTestPath = newTestFiles.length > 0 ? newTestFiles[0] : expectedTestPath;
-        const actualTestPath = join(clonePath, generatedTestPath);
-        const testContent = readFileSync(actualTestPath, 'utf-8');
-
+      // Validate test content
+      for (const testFile of testFiles) {
+        const testPath = join(clonePath, testFile);
+        const testContent = readFileSync(testPath, 'utf-8');
         if (!this.isValidTestContent(testContent)) {
-          if (attempt < this.maxRetries) continue;
-          throw new Error('AI failed to generate valid test content after all attempts');
+          throw new Error(`Invalid test content in ${testFile}`);
         }
+      }
 
-        await this.updateAndSaveProgress(job, progressBase + 10, `Running tests (attempt ${attempt}/${this.maxRetries})`);
+      // Reset any non-test files the AI may have touched
+      this.resetNonTestFiles(clonePath);
 
-        await this.commandRunner.runTestsWithCoverage(projectDir, packageManager, true);
+      const finalChangedFiles = this.getChangedFiles(clonePath);
+      const invalidFiles = finalChangedFiles.filter(f => !this.isTestFile(f));
+      if (invalidFiles.length > 0) {
+        throw new Error(`Invalid files modified: ${invalidFiles.join(', ')}`);
+      }
 
-        this.coverageParser.setProjectRoot(clonePath);
-        const coverageReport = await this.parseCoverageOutput(projectDir);
+      await this.updateAndSaveProgress(job, 60, 'Running tests');
 
+      await this.commandRunner.runTestsWithCoverage(projectDir, packageManager, true);
+
+      this.coverageParser.setProjectRoot(clonePath);
+      const coverageReport = await this.parseCoverageOutput(projectDir);
+
+      // Update coverage for each file
+      let totalImprovedCoverage = 0;
+      for (const coverageFile of coverageFiles) {
         let fileCoverage = coverageReport.files.find(f => f.path === coverageFile.path.value);
-        if (!fileCoverage) {
-          fileCoverage = coverageReport.files.find(f =>
-            f.path.endsWith(`/${basename(coverageFile.path.value)}`) &&
-            f.path.includes(basename(dirname(coverageFile.path.value)))
-          );
-        }
         if (!fileCoverage) {
           fileCoverage = coverageReport.files.find(f =>
             basename(f.path) === basename(coverageFile.path.value)
@@ -342,54 +349,40 @@ export class JobProcessor {
         }
 
         if (fileCoverage) {
-          currentCoverage = fileCoverage.percentage;
-          currentUncoveredLines = fileCoverage.uncoveredLines;
-
-          // Update coverage in database
           coverageFile.updateCoverage(
-            CoveragePercentage.create(currentCoverage),
-            currentUncoveredLines,
+            CoveragePercentage.create(fileCoverage.percentage),
+            fileCoverage.uncoveredLines,
           );
-          await this.coverageFileRepo.save(coverageFile);
-        } else {
-          currentCoverage = coverageReport.totalCoverage;
+          totalImprovedCoverage += fileCoverage.percentage;
         }
-
-        if (currentCoverage >= this.coverageThreshold) {
-          break;
-        }
+        await this.coverageFileRepo.save(coverageFile);
       }
-
-      if (!generatedTestPath) {
-        throw new Error('No test file was generated');
-      }
-
-      await this.updateAndSaveProgress(job, 70, 'Validating changes');
-      this.resetNonTestFiles(clonePath);
-
-      const changedFiles = this.getChangedFiles(clonePath);
-      const invalidFiles = changedFiles.filter(f => !this.isTestFile(f));
-
-      if (invalidFiles.length > 0) {
-        throw new Error(`Invalid files modified: ${invalidFiles.join(', ')}`);
-      }
+      const avgCoverage = totalImprovedCoverage / coverageFiles.length;
 
       await this.updateAndSaveProgress(job, 80, 'Committing changes');
+
+      const commitMessage = fileCount === 1
+        ? `test: improve coverage for ${coverageFiles[0].path.value}\n\nCoverage: ${avgCoverage.toFixed(1)}%`
+        : `test: improve coverage for ${fileCount} files\n\nFiles: ${job.filePaths.join(', ')}\nAverage coverage: ${avgCoverage.toFixed(1)}%`;
 
       await this.githubService.commitAndPush({
         workDir: clonePath,
         branch: branchName,
-        message: `test: improve coverage for ${coverageFile.path.value}\n\nCoverage: ${currentCoverage.toFixed(1)}%`,
-        files: changedFiles,
+        message: commitMessage,
+        files: finalChangedFiles,
       });
 
       await this.updateAndSaveProgress(job, 90, 'Creating pull request');
 
+      const prTitle = fileCount === 1
+        ? `Improve test coverage for ${basename(coverageFiles[0].path.value)}`
+        : `Improve test coverage for ${fileCount} files`;
+
       const prInfo = await this.githubApiClient.createPullRequest({
         owner: repository.owner,
         repo: repository.name,
-        title: `Improve test coverage for ${basename(coverageFile.path.value)}`,
-        body: this.generatePrDescription(coverageFile.path.value, coverageFile.uncoveredLines, currentCoverage, attempt),
+        title: prTitle,
+        body: this.generateMultiFilePrDescription(coverageFiles, avgCoverage),
         head: branchName,
         base: repository.defaultBranch,
       });
@@ -397,10 +390,13 @@ export class JobProcessor {
       job.completeImprovement(GitHubPrUrl.create(prInfo.url));
       await this.jobRepo.save(job);
 
-      coverageFile.markAsImproved(CoveragePercentage.create(currentCoverage), []);
-      await this.coverageFileRepo.save(coverageFile);
+      // Mark all files as improved
+      for (const coverageFile of coverageFiles) {
+        coverageFile.markAsImproved(coverageFile.coveragePercentage, coverageFile.uncoveredLines);
+        await this.coverageFileRepo.save(coverageFile);
+      }
 
-      this.emitProgress(job.id, 100, `Completed (${currentCoverage.toFixed(1)}% coverage)`);
+      this.emitProgress(job.id, 100, `Completed (${avgCoverage.toFixed(1)}% avg coverage)`);
 
       return job;
     } catch (error) {
@@ -408,8 +404,9 @@ export class JobProcessor {
       job.fail(errorMessage);
       await this.jobRepo.save(job);
 
-      if (job.fileId) {
-        const coverageFile = await this.coverageFileRepo.findById(job.fileId);
+      // Reset all files to pending
+      for (const fileId of job.fileIds) {
+        const coverageFile = await this.coverageFileRepo.findById(fileId);
         if (coverageFile) {
           coverageFile.resetToPending();
           await this.coverageFileRepo.save(coverageFile);
@@ -584,14 +581,20 @@ export class JobProcessor {
     } catch { /* ignore */ }
   }
 
-  private generatePrDescription(filePath: string, uncoveredLines: number[], finalCoverage: number, attempts: number): string {
+  private generateMultiFilePrDescription(coverageFiles: CoverageFile[], avgCoverage: number): string {
+    const fileCount = coverageFiles.length;
+    const fileList = coverageFiles.map(f =>
+      `- \`${f.path.value}\` (${f.coveragePercentage.value.toFixed(1)}%)`
+    ).join('\n');
+
     return `## Summary
-This PR improves test coverage for \`${filePath}\`.
+This PR improves test coverage for ${fileCount} file${fileCount > 1 ? 's' : ''}.
+
+### Files
+${fileList}
 
 ### Results
-- **Final Coverage:** ${finalCoverage.toFixed(1)}%
-- **AI Attempts:** ${attempts}
-- **Lines Targeted:** ${uncoveredLines.slice(0, 10).join(', ')}${uncoveredLines.length > 10 ? '...' : ''}
+- **Average Coverage:** ${avgCoverage.toFixed(1)}%
 
 ### Test Plan
 - [ ] Review generated tests

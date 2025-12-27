@@ -22,8 +22,8 @@ export interface JobProps {
   filesBelowThreshold?: number;
 
   // Improvement-specific fields
-  fileId?: string;
-  filePath?: string;
+  fileIds?: string[];
+  filePaths?: string[];
   aiProvider?: AiProvider;
   prUrl?: GitHubPrUrl | null;
 }
@@ -50,8 +50,8 @@ export class Job {
   private _filesBelowThreshold: number;
 
   // Improvement-specific
-  private readonly _fileId: string | null;
-  private readonly _filePath: string | null;
+  private readonly _fileIds: string[];
+  private readonly _filePaths: string[];
   private readonly _aiProvider: AiProvider | null;
   private _prUrl: GitHubPrUrl | null;
 
@@ -72,8 +72,8 @@ export class Job {
     this._filesBelowThreshold = props.filesBelowThreshold || 0;
 
     // Improvement-specific
-    this._fileId = props.fileId || null;
-    this._filePath = props.filePath || null;
+    this._fileIds = props.fileIds || [];
+    this._filePaths = props.filePaths || [];
     this._aiProvider = props.aiProvider || null;
     this._prUrl = props.prUrl || null;
   }
@@ -95,19 +95,25 @@ export class Job {
   }
 
   /**
-   * Create an improvement job
+   * Create an improvement job for one or more files
    */
   static createImprovement(props: {
     repositoryId: string;
-    fileId: string;
-    filePath: string;
+    fileIds: string[];
+    filePaths: string[];
     aiProvider: AiProvider;
   }): Job {
+    if (props.fileIds.length === 0) {
+      throw new Error('At least one file is required for improvement job');
+    }
+    if (props.fileIds.length !== props.filePaths.length) {
+      throw new Error('fileIds and filePaths must have the same length');
+    }
     return new Job({
       type: 'improvement',
       repositoryId: props.repositoryId,
-      fileId: props.fileId,
-      filePath: props.filePath,
+      fileIds: props.fileIds,
+      filePaths: props.filePaths,
       aiProvider: props.aiProvider,
     });
   }
@@ -167,12 +173,16 @@ export class Job {
   }
 
   // Improvement-specific getters
-  get fileId(): string | null {
-    return this._fileId;
+  get fileIds(): string[] {
+    return this._fileIds;
   }
 
-  get filePath(): string | null {
-    return this._filePath;
+  get filePaths(): string[] {
+    return this._filePaths;
+  }
+
+  get fileCount(): number {
+    return this._fileIds.length;
   }
 
   get aiProvider(): AiProvider | null {

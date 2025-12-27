@@ -62,9 +62,9 @@ function initializeSchema(database: Database.Database): void {
       branch TEXT,
       files_found INTEGER DEFAULT 0,
       files_below_threshold INTEGER DEFAULT 0,
-      -- Improvement-specific fields
-      file_id TEXT,
-      file_path TEXT,
+      -- Improvement-specific fields (JSON arrays for multi-file support)
+      file_ids TEXT,
+      file_paths TEXT,
       ai_provider TEXT,
       pr_url TEXT,
       FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE
@@ -95,6 +95,23 @@ function initializeSchema(database: Database.Database): void {
     `);
     // Note: SQLite doesn't support changing UNIQUE constraints on existing tables,
     // but new inserts will enforce UNIQUE(url, branch) from the CREATE TABLE
+  }
+
+  // Migration: Convert file_id/file_path to file_ids/file_paths (JSON arrays)
+  const jobColumns = database.prepare("PRAGMA table_info(jobs)").all() as Array<{ name: string }>;
+  const hasOldFileId = jobColumns.some(col => col.name === 'file_id');
+  const hasNewFileIds = jobColumns.some(col => col.name === 'file_ids');
+
+  if (hasOldFileId && !hasNewFileIds) {
+    // Migrate old single-file columns to new array columns
+    database.exec(`
+      ALTER TABLE jobs ADD COLUMN file_ids TEXT;
+      ALTER TABLE jobs ADD COLUMN file_paths TEXT;
+      UPDATE jobs SET
+        file_ids = CASE WHEN file_id IS NOT NULL THEN '["' || file_id || '"]' ELSE '[]' END,
+        file_paths = CASE WHEN file_path IS NOT NULL THEN '["' || file_path || '"]' ELSE '[]' END
+      WHERE type = 'improvement';
+    `);
   }
 }
 

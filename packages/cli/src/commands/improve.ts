@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora, { type Ora } from 'ora';
-import { createJob, createBulkJobs, getJob, getCoverage, setApiUrl } from '../api.js';
+import { createJob, getJob, getCoverage, setApiUrl } from '../api.js';
 import type { AiProvider } from '../types.js';
 
 export const improveCommand = new Command('improve')
@@ -66,60 +66,39 @@ export const improveCommand = new Command('improve')
       process.exit(1);
     }
 
-    const spinner = ora(`Creating improvement job(s) with ${provider}...`).start();
+    const spinner = ora(`Creating improvement job for ${fileIds.length} file${fileIds.length > 1 ? 's' : ''} with ${provider}...`).start();
 
     try {
-      if (fileIds.length === 1) {
-        // Single file - use existing logic
-        const job = await createJob(options.repoId, fileIds[0], provider);
-        spinner.succeed(`Job created: ${job.id}`);
+      // Create a single job for all files
+      const job = await createJob(options.repoId, fileIds, provider);
+      spinner.succeed(`Job created: ${job.id}`);
 
-        console.log();
-        console.log(chalk.bold('Job Details'));
-        console.log(`  ID: ${job.id}`);
-        console.log(`  File: ${job.filePath}`);
-        console.log(`  Provider: ${job.aiProvider}`);
-        console.log(`  Status: ${chalk.yellow(job.status)}`);
-
-        if (options.wait) {
-          console.log();
-          await waitForJob(job.id, spinner);
-        } else {
-          console.log();
-          console.log(chalk.gray(`Use 'cov status ${job.id}' to check progress`));
+      console.log();
+      console.log(chalk.bold('Job Details'));
+      console.log(`  ID: ${job.id}`);
+      console.log(`  Files: ${job.fileCount}`);
+      if (job.fileCount <= 5) {
+        for (const path of job.filePaths) {
+          console.log(`    - ${path}`);
         }
       } else {
-        // Multiple files - use bulk endpoint
-        const result = await createBulkJobs(options.repoId, fileIds, provider);
-        spinner.succeed(`Created ${result.created} jobs (${result.skipped} skipped - already active)`);
+        for (const path of job.filePaths.slice(0, 3)) {
+          console.log(`    - ${path}`);
+        }
+        console.log(chalk.gray(`    ... and ${job.fileCount - 3} more`));
+      }
+      console.log(`  Provider: ${job.aiProvider}`);
+      console.log(`  Status: ${chalk.yellow(job.status)}`);
 
+      if (options.wait) {
         console.log();
-        console.log(chalk.bold('Bulk Job Summary'));
-        console.log(`  Total requested: ${result.total}`);
-        console.log(`  Created: ${chalk.green(result.created.toString())}`);
-        console.log(`  Skipped: ${chalk.yellow(result.skipped.toString())}`);
-
-        if (result.jobs.length > 0) {
-          console.log();
-          console.log(chalk.bold('Jobs Created:'));
-          for (const job of result.jobs.slice(0, 10)) {
-            console.log(`  ${job.id} - ${job.filePath}`);
-          }
-          if (result.jobs.length > 10) {
-            console.log(chalk.gray(`  ... and ${result.jobs.length - 10} more`));
-          }
-        }
-
-        if (options.wait && result.jobs.length > 0) {
-          console.log();
-          await waitForJobs(result.jobs.map((j) => j.id), spinner);
-        } else if (result.jobs.length > 0) {
-          console.log();
-          console.log(chalk.gray(`Use 'cov status --repo-id ${options.repoId}' to check progress`));
-        }
+        await waitForJob(job.id, spinner);
+      } else {
+        console.log();
+        console.log(chalk.gray(`Use 'cov status ${job.id}' to check progress`));
       }
     } catch (error) {
-      spinner.fail('Failed to create job(s)');
+      spinner.fail('Failed to create job');
       console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
       process.exit(1);
     }
@@ -139,7 +118,7 @@ async function waitForJob(jobId: string, spinner: Ora): Promise<void> {
     }
 
     if (job.status === 'completed') {
-      spinner.succeed('Job completed successfully!');
+      spinner.succeed(`Job completed successfully! (${job.fileCount} file${job.fileCount > 1 ? 's' : ''})`);
       console.log();
       console.log(chalk.green.bold('Pull Request Created:'));
       console.log(`  ${chalk.underline(job.prUrl)}`);
@@ -166,51 +145,9 @@ function getProgressMessage(progress: number): string {
   if (progress < 10) return 'Starting...';
   if (progress < 20) return 'Cloning repository...';
   if (progress < 30) return 'Creating branch...';
-  if (progress < 40) return 'Reading source file...';
-  if (progress < 60) return 'Generating tests with AI...';
-  if (progress < 70) return 'Writing test file...';
+  if (progress < 50) return 'Generating tests with AI...';
+  if (progress < 70) return 'Validating tests...';
   if (progress < 85) return 'Committing changes...';
   if (progress < 95) return 'Creating pull request...';
   return 'Finalizing...';
-}
-
-async function waitForJobs(jobIds: string[], spinner: Ora): Promise<void> {
-  spinner.start(`Waiting for ${jobIds.length} jobs to complete...`);
-
-  const completed: string[] = [];
-  const failed: string[] = [];
-
-  while (completed.length + failed.length < jobIds.length) {
-    for (const jobId of jobIds) {
-      if (completed.includes(jobId) || failed.includes(jobId)) continue;
-
-      try {
-        const job = await getJob(jobId);
-
-        if (job.status === 'completed') {
-          completed.push(jobId);
-          console.log(chalk.green(`  ✓ ${job.filePath} - PR: ${job.prUrl}`));
-        } else if (job.status === 'failed' || job.status === 'cancelled') {
-          failed.push(jobId);
-          console.log(chalk.red(`  ✗ ${job.filePath} - ${job.error || 'Cancelled'}`));
-        }
-      } catch (error) {
-        // Ignore errors during polling
-      }
-    }
-
-    spinner.text = `Waiting for jobs... (${completed.length + failed.length}/${jobIds.length} done)`;
-
-    if (completed.length + failed.length < jobIds.length) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    }
-  }
-
-  if (failed.length === 0) {
-    spinner.succeed(`All ${completed.length} jobs completed successfully!`);
-  } else if (completed.length === 0) {
-    spinner.fail(`All ${failed.length} jobs failed`);
-  } else {
-    spinner.warn(`${completed.length} completed, ${failed.length} failed`);
-  }
 }

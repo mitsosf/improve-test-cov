@@ -45,8 +45,8 @@ describe('SqliteJobRepository', () => {
     it('should save and retrieve an improvement job', async () => {
       const job = Job.createImprovement({
         repositoryId: testRepo.id,
-        fileId: testFile.id,
-        filePath: 'src/utils.ts',
+        fileIds: [testFile.id],
+        filePaths: ['src/utils.ts'],
         aiProvider: 'claude',
       });
 
@@ -58,6 +58,8 @@ describe('SqliteJobRepository', () => {
       expect(found!.aiProvider).toBe('claude');
       expect(found!.status.isPending).toBe(true);
       expect(found!.type).toBe('improvement');
+      expect(found!.fileIds).toEqual([testFile.id]);
+      expect(found!.filePaths).toEqual(['src/utils.ts']);
     });
 
     it('should save and retrieve an analysis job', async () => {
@@ -81,8 +83,8 @@ describe('SqliteJobRepository', () => {
     it('should update job status', async () => {
       const job = Job.createImprovement({
         repositoryId: testRepo.id,
-        fileId: testFile.id,
-        filePath: 'src/utils.ts',
+        fileIds: [testFile.id],
+        filePaths: ['src/utils.ts'],
         aiProvider: 'claude',
       });
 
@@ -99,8 +101,8 @@ describe('SqliteJobRepository', () => {
     it('should save completed improvement job with PR URL', async () => {
       const job = Job.createImprovement({
         repositoryId: testRepo.id,
-        fileId: testFile.id,
-        filePath: 'src/utils.ts',
+        fileIds: [testFile.id],
+        filePaths: ['src/utils.ts'],
         aiProvider: 'claude',
       });
 
@@ -137,14 +139,14 @@ describe('SqliteJobRepository', () => {
     it('should return pending jobs', async () => {
       const job1 = Job.createImprovement({
         repositoryId: testRepo.id,
-        fileId: testFile.id,
-        filePath: 'src/utils.ts',
+        fileIds: [testFile.id],
+        filePaths: ['src/utils.ts'],
         aiProvider: 'claude',
       });
       const job2 = Job.createImprovement({
         repositoryId: testRepo.id,
-        fileId: testFile.id,
-        filePath: 'src/other.ts',
+        fileIds: [testFile.id],
+        filePaths: ['src/other.ts'],
         aiProvider: 'openai',
       });
 
@@ -166,8 +168,8 @@ describe('SqliteJobRepository', () => {
       });
       const improvementJob = Job.createImprovement({
         repositoryId: testRepo.id,
-        fileId: testFile.id,
-        filePath: 'src/utils.ts',
+        fileIds: [testFile.id],
+        filePaths: ['src/utils.ts'],
         aiProvider: 'claude',
       });
 
@@ -188,8 +190,8 @@ describe('SqliteJobRepository', () => {
     it('should return active job for repository', async () => {
       const job = Job.createImprovement({
         repositoryId: testRepo.id,
-        fileId: testFile.id,
-        filePath: 'src/utils.ts',
+        fileIds: [testFile.id],
+        filePaths: ['src/utils.ts'],
         aiProvider: 'claude',
       });
 
@@ -215,8 +217,8 @@ describe('SqliteJobRepository', () => {
       });
       const improvementJob = Job.createImprovement({
         repositoryId: testRepo.id,
-        fileId: testFile.id,
-        filePath: 'src/utils.ts',
+        fileIds: [testFile.id],
+        filePaths: ['src/utils.ts'],
         aiProvider: 'claude',
       });
 

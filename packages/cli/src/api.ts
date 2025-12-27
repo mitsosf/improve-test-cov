@@ -3,10 +3,8 @@ import type {
   CoverageReportDto,
   JobDto,
   JobListDto,
-  BulkJobDto,
   CreateRepositoryRequest,
   CreateJobRequest,
-  CreateBulkJobRequest,
   AiProvider,
 } from './types.js';
 
@@ -75,12 +73,12 @@ export async function getCoverage(
 // Jobs API
 export async function createJob(
   repositoryId: string,
-  fileId: string,
+  fileIds: string[],
   aiProvider: AiProvider = 'claude'
 ): Promise<JobDto> {
   return request<JobDto>('/jobs', {
     method: 'POST',
-    body: JSON.stringify({ repositoryId, fileId, aiProvider } as CreateJobRequest),
+    body: JSON.stringify({ repositoryId, fileIds, aiProvider } as CreateJobRequest),
   });
 }
 
@@ -95,15 +93,4 @@ export async function getJob(id: string): Promise<JobDto> {
 
 export async function cancelJob(id: string): Promise<void> {
   await request<void>(`/jobs/${id}`, { method: 'DELETE' });
-}
-
-export async function createBulkJobs(
-  repositoryId: string,
-  fileIds: string[],
-  aiProvider: AiProvider = 'claude',
-): Promise<BulkJobDto> {
-  return request<BulkJobDto>('/jobs/bulk', {
-    method: 'POST',
-    body: JSON.stringify({ repositoryId, fileIds, aiProvider } as CreateBulkJobRequest),
-  });
 }
