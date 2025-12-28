@@ -96,6 +96,8 @@ export class ClaudeProvider extends BaseAiProvider {
       proc.on('close', (code) => {
         clearTimeout(timeout);
         console.log(`[ClaudeProvider] CLI exited with code ${code}`);
+        if (stderr) console.log(`[ClaudeProvider] stderr: ${stderr}`);
+        if (stdout) console.log(`[ClaudeProvider] stdout: ${stdout}`);
         // Accept exit code 0 or 1 (Claude sometimes exits with 1 even on success)
         if (code === 0 || code === 1) {
           resolve(stdout);

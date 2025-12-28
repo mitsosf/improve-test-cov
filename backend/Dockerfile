@@ -3,7 +3,7 @@
 FROM node:24-alpine AS builder
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@9.15.1 --activate
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate
 
 WORKDIR /app
 
@@ -25,16 +25,20 @@ RUN pnpm --filter=@coverage-improver/backend build
 
 # Create a production deployment
 WORKDIR /app/backend
-RUN pnpm deploy --filter=@coverage-improver/backend --prod /prod
+RUN pnpm deploy --filter=@coverage-improver/backend --prod --legacy /prod
 
 # Stage 2: Production
 FROM node:24-alpine AS runner
 
-# Install git (needed for cloning repos) and curl (fallback for API calls)
-RUN apk add --no-cache git curl
+# Install git, curl, and su-exec (for dropping privileges)
+RUN apk add --no-cache git curl su-exec
 
 # Install AI CLIs globally
 RUN npm install -g @anthropic-ai/claude-code @openai/codex
+
+# Create non-root user (required for Claude CLI --dangerously-skip-permissions)
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
 
 WORKDIR /app
 
@@ -44,8 +48,13 @@ COPY --from=builder /prod ./
 # Copy built artifacts
 COPY --from=builder /app/backend/dist ./dist
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data /tmp/coverage-improver
+# Copy entrypoint script
+COPY backend/docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Create data directory for SQLite and set permissions
+RUN mkdir -p /app/data /tmp/coverage-improver && \
+    chown -R appuser:appgroup /app /tmp/coverage-improver
 
 # Environment
 ENV NODE_ENV=production
@@ -53,4 +62,6 @@ ENV PORT=3000
 
 EXPOSE 3000
 
+# Start as root, entrypoint fixes socket permissions then drops to appuser
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "dist/main.js"]

@@ -1,4 +1,25 @@
 packages:
-  - 'backend'
-  - 'frontend'
-  - 'packages/*'
+  - backend
+  - frontend
+  - packages/*
+
+onlyBuiltDependencies:
+  - ' '
+  - '-'
+  - '3'
+  - '@nestjs/core'
+  - b
+  - better-sqlite3
+  - cpu-features
+  - d
+  - e
+  - esbuild
+  - i
+  - l
+  - protobufjs
+  - q
+  - r
+  - s
+  - ssh2
+  - t
+  - u

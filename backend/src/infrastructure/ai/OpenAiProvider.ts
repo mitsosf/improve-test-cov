@@ -51,11 +51,52 @@ export class OpenAiProvider extends BaseAiProvider {
     });
   }
 
+  private async loginWithApiKey(): Promise<void> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY environment variable not set');
+    }
+
+    return new Promise((resolve, reject) => {
+      console.log('[OpenAiProvider] Authenticating with API key...');
+
+      const proc = spawn('codex', ['login', '--with-api-key'], {
+        env: process.env,
+      });
+
+      let stderr = '';
+      proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          console.log('[OpenAiProvider] Authentication successful');
+          resolve();
+        } else {
+          console.log(`[OpenAiProvider] Login failed: ${stderr}`);
+          // Don't reject - maybe already logged in
+          resolve();
+        }
+      });
+
+      proc.on('error', (err) => {
+        console.log(`[OpenAiProvider] Login error: ${err.message}`);
+        resolve(); // Don't fail, try to continue
+      });
+
+      // Pipe API key via stdin
+      proc.stdin.write(apiKey);
+      proc.stdin.end();
+    });
+  }
+
   private async callCodex(prompt: string, workDir?: string): Promise<string> {
     // Codex is an agentic CLI that modifies files directly
     // Use exec with full sandbox access to allow file writes
     const timeoutMs = parseInt(process.env.AI_TIMEOUT_MS || '300000', 10); // 5 min default
     const outputFile = `/tmp/codex-output-${Date.now()}.txt`;
+
+    // First, authenticate with API key (required for non-interactive/Docker)
+    await this.loginWithApiKey();
 
     return new Promise((resolve, reject) => {
       console.log('[OpenAiProvider] Starting Codex CLI in agentic mode...');
@@ -99,6 +140,8 @@ export class OpenAiProvider extends BaseAiProvider {
       proc.on('close', (code) => {
         clearTimeout(timeout);
         console.log(`[OpenAiProvider] CLI exited with code ${code}`);
+        if (stderr) console.log(`[OpenAiProvider] stderr: ${stderr}`);
+        if (stdout) console.log(`[OpenAiProvider] stdout: ${stdout}`);
 
         // Check for authentication errors - fail fast with clear message
         if (stdout.includes('token_expired') || stdout.includes('401 Unauthorized')) {

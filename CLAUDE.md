@@ -4,8 +4,6 @@
 A NestJS service that automatically improves TypeScript test coverage by generating tests via AI (Claude/OpenAI) and submitting them as GitHub PRs.
 
 ## Development Workflow
-- Each commit is a self-contained, testable unit
-- After each commit, test before continuing
 - CLI before Frontend (React is cherry on top)
 
 ## Quick Start
@@ -16,17 +14,17 @@ pnpm install
 # Start backend in dev mode
 pnpm dev --filter=@coverage-improver/backend
 
-# Start frontend (after Sprint 4)
+# Start frontend
 pnpm dev --filter=@coverage-improver/frontend
 
-# Run CLI (after Sprint 3)
+# Run CLI
 cd packages/cli && pnpm link --global
 cov --help
 ```
 
 ## Architecture
 - **backend/**: NestJS with DDD (Domain-Driven Design)
-- **frontend/**: React + Vite dashboard
+- **frontend/**: React dashboard
 - **packages/cli/**: Commander.js CLI
 - **packages/shared/**: Shared types
 

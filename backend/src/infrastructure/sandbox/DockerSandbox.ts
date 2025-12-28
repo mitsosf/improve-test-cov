@@ -279,7 +279,12 @@ export class DockerSandbox implements ISandbox {
   }
 
   private async createTempDir(prefix: string): Promise<string> {
-    return fs.promises.mkdtemp(path.join(os.tmpdir(), `${prefix}-`));
+    // Use shared volume path when running in Docker (for DinD volume mounting to work)
+    const baseDir = process.env.NODE_ENV === 'production'
+      ? '/tmp/coverage-improver'
+      : os.tmpdir();
+    await fs.promises.mkdir(baseDir, { recursive: true });
+    return fs.promises.mkdtemp(path.join(baseDir, `${prefix}-`));
   }
 
   private async cleanupDir(dir: string): Promise<void> {
