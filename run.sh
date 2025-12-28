@@ -118,13 +118,6 @@ run_docker() {
         exit 1
     fi
 
-    # Auto-detect Docker socket GID for cross-platform support
-    if [ -S /var/run/docker.sock ]; then
-        DOCKER_GID=$(stat -f '%g' /var/run/docker.sock 2>/dev/null || stat -c '%g' /var/run/docker.sock 2>/dev/null)
-        export DOCKER_GID
-        echo -e "  ${GREEN}✓${NC} Docker socket GID: $DOCKER_GID"
-    fi
-
     echo -e "${GREEN}Building and starting services...${NC}"
     docker compose up --build
 }

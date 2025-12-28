@@ -11,9 +11,6 @@ services:
       - ./data:/app/data                          # SQLite database persistence
       - /tmp/coverage-improver:/tmp/coverage-improver  # Temp directory for cloning
       - /var/run/docker.sock:/var/run/docker.sock  # Docker socket for sandboxing
-    # Add user to docker socket group (works across macOS/Linux)
-    group_add:
-      - ${DOCKER_GID:-1}  # macOS default is 1, Linux is usually 999 or docker
     environment:
       - NODE_ENV=production
       - PORT=3000
